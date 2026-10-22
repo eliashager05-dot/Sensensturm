@@ -12,14 +12,19 @@ Jeder Typ hat ein eigenes Moveset (14 Angriffe + Griff/Wurf) und eigene Werte f�
 Alle Grafiken werden im Code gezeichnet, alle Sounds werden synthetisiert. Es gibt keine fremden Assets.
 
 ## Arenen
-Unter „Lokal spielen“ bzw. in der Host-Lobby wählt man unter **Arena** eine von vier Arenen. Der Client übernimmt automatisch die Arena des Hosts. Alle Arenen haben denselben Aufbau (Hauptbühne + drei Schwebeplattformen), sie unterscheiden sich nur im Aussehen:
+Unter „Lokal spielen“ bzw. in der Host-Lobby wählt man unter **Arena** eine von vier Arenen. Der Client übernimmt automatisch die Arena des Hosts.
 
-| Arena | Stimmung |
+| Arena | Aufbau |
 |---|---|
-| **Mondfriedhof** | Nacht, Vollmond, Grabsteine und Kerzen (Original) |
-| **Kirschblütental** | Kirschbäume, Steinlaternen, Pagoden-Burg, Wasserfälle, Torii im See, fallende Blütenblätter |
-| **Herbsttempel** | Sonnenuntergang, riesige Buddha-Statue, rote Ahornbäume, Tempel auf Felsinseln, Wolkenmeer, fallende Blätter |
-| **Sternenhain** | Sternennacht, leuchtender Weltenbaum, Sichelmond, Ruinentor mit Runen, Leuchtpilze, Glühwürmchen |
+| **Mondfriedhof** | Original: Nacht, Vollmond, drei Schwebeplattformen |
+| **Kirschblütental** | Kirschbäume, Pagoden-Burg, Torii im See; zwei hohe Plattformen weit außen |
+| **Herbsttempel** | Sonnenuntergang, Buddha-Statue, roter Ahorn; zwei Plattformen |
+| **Sternenhain** | Sternennacht, leuchtender Weltenbaum, Ruinentor; zwei Plattformen |
+
+Die drei neuen Arenen sind gemalte Bilder (`assets/stage_*.jpg`, beim Bauen in die EXE eingebettet). Die Plattformen jeder Arena (`Arena.Layouts` in `src/Sim.cs`) sind so ausgemessen, dass sie genau auf den gemalten Plattformen liegen.
+
+## Grafik und Leistung
+*Einstellungen > Grafik*: **Automatisch** (Standard), Hoch, Mittel oder Niedrig. Gezeichnet wird in höchstens 1080p (Mittel 75 %, Niedrig 50 %) und dann aufs Fenster gestreckt. Bei „Automatisch“ senkt das Spiel die Stufe selbst, wenn es dauerhaft unter etwa 45 FPS läuft. Oben rechts stehen FPS, Zeichenzeit pro Bild und die Zeichenauflösung (abschaltbar über „FPS / Ping anzeigen“).
 
 ## Starten
 `Sensensturm.exe` doppelklicken. Benötigt wird nur Windows 10/11 (das .NET Framework 4.8 ist dort bereits enthalten).

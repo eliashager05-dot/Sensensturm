@@ -10,9 +10,9 @@ namespace Sensensturm
     {
         public Pen Outline, Bone, BoneBack, Thin, ShaftOut, Shaft, Edge, Rim, Spine;
         public Pen Thick, ThickBack, ThickOut, Crack, GlowLine, HeadOut, BowString, Arrow, Fine;
-        public Pen Wrap, WrapBack, WrapOut, LimbOut, Sleeve, SleeveBack, Pants, PantsBack, Leather, LeatherBack, Fold, BladeDark;
+        public Pen Wrap, WrapBack, WrapOut, LimbOut, Sleeve, SleeveBack, Pants, PantsBack, Leather, LeatherBack, Fold;
         public SolidBrush BoneB, BoneBackB, OutlineB, Socket, EyeGlow, EyeCore, BladeB, ShieldB, RimB, GlowB, SkinB;
-        public SolidBrush EyeRing, ClothB, ClothShadeB, ClothDarkB, LeatherB, LeatherDarkB, HairB, TrimB, Highlight;
+        public SolidBrush EyeRing, BladeDarkB, ClothB, ClothShadeB, ClothDarkB, LeatherB, LeatherDarkB, HairB, TrimB, Highlight;
         public float Alpha;
     }
 
@@ -49,7 +49,7 @@ namespace Sensensturm
         int goTimer;
         int frame;
         Bitmap bg;
-        int bgW, bgH, bgStage = -1;
+        int bgW, bgH;
         readonly Dictionary<int, Style> styles = new Dictionary<int, Style>();
         public Font FTitle, FBig, FMed, FSmall, FTiny, FHudDmg, FHudName, FHuge;
         GraphicsPath island, midLayer;
@@ -136,9 +136,9 @@ namespace Sensensturm
                 Leather = RPen(M(c.LeatherDark), 7.5f),
                 LeatherBack = RPen(M(D(c.LeatherDark)), 7.5f),
                 Fold = RPen(M(D(c.Cloth)), 1.8f),
-                BladeDark = RPen(M(D(c.Blade)), 9f),
                 GlowB = new SolidBrush(A(c.Glow, a)),
                 SkinB = new SolidBrush(A(mode == 0 ? c.Skin : bone, a)),
+                BladeDarkB = new SolidBrush(M(D(c.Blade))),
                 EyeRing = new SolidBrush(A(c.EyeAura.A > 0 ? c.EyeAura : c.Glow, a)),
                 ClothB = new SolidBrush(M(c.Cloth)),
                 ClothShadeB = new SolidBrush(M(D(c.Cloth))),
@@ -305,15 +305,14 @@ namespace Sensensturm
                     using (var gp = RPen(A(c.Glow, 0.5f * alpha), 11f)) g.DrawPath(gp, path);
                 g.DrawPath(st.HeadOut, path);
                 g.FillPath(st.BladeB, path);
-                // dunkle Patina am Klingenrücken
-                var clip = g.Save();
-                g.SetClip(path, CombineMode.Intersect);
-                using (var back = new GraphicsPath())
-                {
-                    back.AddBezier(r.Top, r.BladeA, r.BladeB, r.Tip);
-                    g.DrawPath(st.BladeDark, back);
-                }
-                g.Restore(clip);
+            }
+            // dunkle Patina am Klingenrücken (schmales Band entlang der Außenkurve, ohne teures SetClip)
+            using (var back = new GraphicsPath())
+            {
+                back.AddBezier(r.Top, r.BladeA, r.BladeB, r.Tip);
+                back.AddBezier(r.Tip, Lp(r.BladeB, r.InA, 0.3f), Lp(r.BladeA, r.InB, 0.3f), Lp(r.Top, r.Inner, 0.25f));
+                back.CloseFigure();
+                g.FillPath(st.BladeDarkB, back);
             }
             // Schneide mit Scharten
             using (var edge = new GraphicsPath())
@@ -584,16 +583,14 @@ namespace Sensensturm
                 path.AddBezier(new PointF(n.X + 1 - len * 0.1f, n.Y + bot - 6), new PointF(n.X + 2, n.Y + 22), new PointF(n.X + 4, n.Y + 6), new PointF(n.X + 3, n.Y - 3));
                 path.CloseFigure();
                 g.DrawPath(st.HeadOut, path);
-                g.FillPath(st.ClothShadeB, path);
-                var clip = g.Save();
-                g.SetClip(path, CombineMode.Intersect);
-                using (var inner = new GraphicsPath())
-                {
-                    inner.AddBezier(new PointF(n.X - 8, n.Y - 2), new PointF(n.X - 16, n.Y + 8), new PointF(n.X - 14 - len * 0.5f, n.Y + bot * 0.6f), new PointF(n.X - 14 - len * 0.7f, n.Y + bot + wv));
-                    using (var pen = RPen(((SolidBrush)st.ClothB).Color, 9)) g.DrawPath(pen, inner);
-                }
-                g.Restore(clip);
+                g.FillPath(st.ClothB, path);
             }
+            // Innenseite etwas dunkler (eigene Fläche statt SetClip)
+            g.FillPolygon(st.ClothShadeB, new[]
+            {
+                new PointF(n.X + 1, n.Y + 2), new PointF(n.X - 6 - len * 0.35f, n.Y + bot * 0.55f),
+                new PointF(n.X - 3 - len * 0.25f, n.Y + bot - 6), new PointF(n.X + 1 - len * 0.1f, n.Y + bot - 9), new PointF(n.X + 2, n.Y + 14)
+            });
         }
 
         void DrawHead(Graphics g, Style st, int body, PointF c, float ang, float scale, float eyeGlow, bool dizzy)
@@ -902,7 +899,7 @@ namespace Sensensturm
             // Geisterbilder für Dash/Dodge/Wirbel
             bool fast = P.state == St.Dash || P.state == St.AirDodge || P.state == St.Dodge || (P.state == St.Hitstun && P.tumble) ||
                         (P.state == St.Attack && (P.atk == Attacks.DAirHeavy || P.atk == Attacks.UAirHeavy || P.atk == Attacks.NHeavy) && P.atkFrame >= Attacks.Of(P).Startup);
-            if (fast && frame % 2 == 0) ghosts.Add(new Ghost { X = wx, Y = wy, Facing = P.facing, Char = P.charId, Life = 12, Pose = pose, Ground = grounded });
+            if (fast && frame % 3 == 0) ghosts.Add(new Ghost { X = wx, Y = wy, Facing = P.facing, Char = P.charId, Life = 12, Pose = pose, Ground = grounded });
 
             // Rankenseil der Bogenschützin
             if (c.Weapon == Weapon.Bow && curPlayers != null)
@@ -1075,12 +1072,11 @@ namespace Sensensturm
         void BuildBackground(int w, int h)
         {
             if (bg != null) bg.Dispose();
-            bgW = w; bgH = h; bgStage = Stage;
+            bgW = w; bgH = h;
             bg = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(bg))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                if (Stage != StageDef.Graveyard) { PaintStageBackground(g, w, h); return; }
                 using (var b = new LinearGradientBrush(new Point(0, 0), new Point(0, h), Color.FromArgb(10, 6, 26), Color.FromArgb(58, 26, 74)))
                     g.FillRectangle(b, 0, 0, w, h);
                 var r = new Random(3);
@@ -1119,8 +1115,9 @@ namespace Sensensturm
         public void DrawBackground(Graphics g, int pixW, int pixH, int ox, int oy)
         {
             SyncStage();
+            if (Stage != StageDef.Graveyard) return; // Arena-Bild wird in DrawWorld/DrawMenuBackdrop gezeichnet
             int bw = (int)(pixW * 1.12f), bh = (int)(pixH * 1.12f);
-            if (bg == null || bgW != bw || bgH != bh || bgStage != Stage) BuildBackground(bw, bh);
+            if (bg == null || bgW != bw || bgH != bh) BuildBackground(bw, bh);
             float px = Math.Max(-1, Math.Min(1, CamX / 1400f)), py = Math.Max(-1, Math.Min(1, (CamY + 150) / 900f));
             int dx = (int)(-(bw - pixW) / 2f - px * (bw - pixW) / 2f);
             int dy = (int)(-(bh - pixH) / 2f - py * (bh - pixH) / 2f);
@@ -1132,7 +1129,6 @@ namespace Sensensturm
 
         void DrawMidLayer(Graphics g)
         {
-            if (Stage != StageDef.Graveyard) { DrawStageMid(g); return; }
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
             float z = 0.25f + Zoom * 0.5f;
@@ -1152,7 +1148,6 @@ namespace Sensensturm
 
         void DrawArena(Graphics g)
         {
-            if (Stage != StageDef.Graveyard) { DrawStageArena(g); return; }
             Box M = Arena.Main;
             // Leuchten unter der Insel
             using (var b = new SolidBrush(Color.FromArgb(28, 170, 90, 255))) g.FillEllipse(b, -520, 380, 1040, 260);
@@ -1196,7 +1191,7 @@ namespace Sensensturm
                 g.DrawLine(p, M.R, 12, M.R, M.B);
             }
             // Schwebeplattformen
-            foreach (var sp in Arena.Soft)
+            foreach (var sp in Arena.SoftOf(StageDef.Graveyard))
             {
                 using (var b = new SolidBrush(Color.FromArgb(48, 30, 70)))
                     g.FillPolygon(b, new[] { new PointF(sp.L + 10, sp.Y + 14), new PointF(sp.R - 10, sp.Y + 14), new PointF((sp.L + sp.R) / 2 + 20, sp.Y + 54), new PointF((sp.L + sp.R) / 2 - 25, sp.Y + 48) });
@@ -1210,7 +1205,6 @@ namespace Sensensturm
 
         void DrawDecor(Graphics g)
         {
-            if (Stage != StageDef.Graveyard) { DrawStageDecor(g); return; }
             // Grabsteine und Kerzen hinter den Kämpfern
             float[] gx = { -560, -470, 430, 540 };
             for (int i = 0; i < gx.Length; i++)
@@ -1591,19 +1585,20 @@ namespace Sensensturm
             curPlayers = s.p;
             Stage = s.stage;
             SyncStage();
-            DrawMidLayer(g);
+            bool image = Stage != StageDef.Graveyard;
+            if (!image) DrawMidLayer(g);
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
             g.ScaleTransform(Zoom, Zoom);
             g.TranslateTransform(-CamX + shakeX, -CamY + shakeY);
+            if (image) DrawStageImage(g);
 
             if (Stage != StageDef.Graveyard) DrawStageMotes(g, false);
             else
                 foreach (var m in motes)
                     using (var b = new SolidBrush(A(m.C, 0.35f + 0.25f * (float)Math.Sin(frame * 0.05 + m.X)))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
 
-            DrawArena(g);
-            DrawDecor(g);
+            if (!image) { DrawArena(g); DrawDecor(g); }
             DrawGhosts(g, s.p);
             for (int i = 0; i < 2; i++) DrawTrail(g, s.p[i]);
             // der zuletzt angreifende Spieler wird oben gezeichnet
@@ -1751,17 +1746,17 @@ namespace Sensensturm
         public void DrawMenuBackdrop(Graphics g)
         {
             SyncStage();
-            DrawMidLayer(g);
+            bool image = Stage != StageDef.Graveyard;
+            if (!image) DrawMidLayer(g);
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
             g.ScaleTransform(0.6f, 0.6f);
             g.TranslateTransform(0, 120);
-            if (Stage != StageDef.Graveyard) DrawStageMotes(g, false);
+            if (image) { DrawStageImage(g); DrawStageMotes(g, false); }
             else
                 foreach (var m in motes)
                     using (var b = new SolidBrush(A(m.C, 0.35f))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
-            DrawArena(g);
-            DrawDecor(g);
+            if (!image) { DrawArena(g); DrawDecor(g); }
             g.Restore(gs);
             using (var b = new SolidBrush(Color.FromArgb(120, 6, 2, 14))) g.FillRectangle(b, 0, 0, VW, VH);
         }

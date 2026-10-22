@@ -28,6 +28,9 @@ namespace Sensensturm
         public readonly Renderer R = new Renderer();
         public Action<bool> SetFullscreen;
         public int Fps;
+        public double FrameMs;   // Zeichenzeit pro Bild (geglättet)
+        public int AutoLevel = 1; // aktuelle Stufe bei Grafik = Automatisch
+        public string RenderInfo = "";
 
         readonly Stopwatch clock = Stopwatch.StartNew();
         double Now { get { return clock.Elapsed.TotalSeconds; } }
@@ -78,6 +81,8 @@ namespace Sensensturm
             hostChar = Settings.P1Char;
             Audio.Volume = Settings.Volume / 10f;
         }
+
+        public void Notify(string msg) { Toast(msg, false); }
 
         void Toast(string msg, bool err)
         {
@@ -313,6 +318,8 @@ namespace Sensensturm
         }
         static string MinutesText(int m) { return m == 0 ? "Unbegrenzt" : m + " Minuten"; }
         static string OnOff(bool b) { return b ? "An" : "Aus"; }
+        static readonly string[] gfxNames = { "Automatisch", "Hoch", "Mittel", "Niedrig" };
+        string GraphicsText() { return Settings.Graphics == 0 ? "Automatisch (" + gfxNames[AutoLevel] + ")" : gfxNames[Settings.Graphics]; }
 
         void Add(string label, string value, Action ok, Action<int> change, bool enabled = true, int textField = -1)
         {
@@ -394,6 +401,7 @@ namespace Sensensturm
                     Add("Lautstärke", Settings.Volume + " / 10", null, d => { Settings.Volume = Math.Max(0, Math.Min(10, Settings.Volume + d)); Audio.Volume = Settings.Volume / 10f; });
                     Add("Bildschirmwackeln", OnOff(Settings.ScreenShake), null, d => Settings.ScreenShake = !Settings.ScreenShake);
                     Add("Vollbild (F11)", OnOff(Settings.Fullscreen), null, d => { Settings.Fullscreen = !Settings.Fullscreen; if (SetFullscreen != null) SetFullscreen(Settings.Fullscreen); });
+                    Add("Grafik", GraphicsText(), null, d => Settings.Graphics = Cycle(Settings.Graphics, d, 4));
                     Add("FPS / Ping anzeigen", OnOff(Settings.ShowStats), null, d => Settings.ShowStats = !Settings.ShowStats);
                     Add("Hitboxen anzeigen (F3)", OnOff(Settings.ShowHitboxes), null, d => Settings.ShowHitboxes = !Settings.ShowHitboxes);
                     Add("Spielername", editing == 2 ? nameText + (frame % 60 < 30 ? "|" : " ") : Settings.PlayerName, null, null, true, 2);
@@ -739,6 +747,8 @@ namespace Sensensturm
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.PixelOffsetMode = PixelOffsetMode.HighSpeed;
+            g.CompositingQuality = CompositingQuality.HighSpeed;
+            g.InterpolationMode = InterpolationMode.Bilinear;
             float sc = Math.Min(W / (float)Renderer.VW, H / (float)Renderer.VH);
             float ox = (W - Renderer.VW * sc) / 2f, oy = (H - Renderer.VH * sc) / 2f;
             mouseSc = sc; mouseOx = ox; mouseOy = oy;
@@ -774,7 +784,7 @@ namespace Sensensturm
             // Statuszeile
             if (Settings.ShowStats)
             {
-                string st = Fps + " FPS";
+                string st = Fps + " FPS  ·  " + FrameMs.ToString("0.0") + " ms  ·  " + RenderInfo;
                 if (host != null) st += host.HasClient ? (host.OverRelay ? "  ·  Online-Relay" : online ? "  ·  Online direkt" : "") + "  ·  Host  ·  Ping " + (host.Ping >= 0 ? host.Ping + " ms" : "-") : "  ·  Host  ·  kein Client";
                 if (client != null && client.Status == ClientSession.Connected) st += (client.OverRelay ? "  ·  Online-Relay" : "") + "  ·  Client  ·  Ping " + (client.Ping >= 0 ? client.Ping + " ms" : "-");
                 using (var b = new SolidBrush(Color.FromArgb(170, 220, 210, 240))) g.DrawString(st, R.FTiny, b, Renderer.VW - g.MeasureString(st, R.FTiny).Width - 10, 6);
@@ -978,7 +988,7 @@ namespace Sensensturm
                     }
                 case Scr.Settings:
                     DrawTitle(g, "Einstellungen");
-                    DrawItems(g, 330, 160, 620, 38, 6);
+                    DrawItems(g, 330, 158, 620, 35, 4);
                     break;
                 case Scr.Combos:
                     DrawCombos(g);
