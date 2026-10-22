@@ -136,6 +136,7 @@ namespace Sensensturm
             int winner = tourSlots[w];
             if (state.winner < 0) Toast("Gleichstand – das Los entscheidet: " + tour.E[winner].Name + " kommt weiter.", false);
             int r = tourR, m = tourM;
+            if (lastReplay != null) tour.Replays[Tournament.Key(r, m)] = lastReplay;
             LeaveTourMatch();
             tour.Advance(r, m, winner, frame + 20);
         }
@@ -157,12 +158,20 @@ namespace Sensensturm
             Audio.Play(Sfx.Hit, 0.5f, 1.2f);
         }
 
+        void AddTourReplay(string label, int key)
+        {
+            Replay rp;
+            if (!tour.Replays.TryGetValue(key, out rp)) return; // z. B. Freilos
+            Add(label, null, () => StartReplay(rp, () => { state = null; Go(Scr.Tourney); }), null);
+        }
+
         void BuildTourneyItems()
         {
             if (tour == null) { Add("Zurück", null, () => Go(Scr.Main), null); return; }
             if (tour.Done)
             {
                 Add("Neues Turnier", null, () => { tour = null; Go(Scr.TourneySetup); }, null);
+                AddTourReplay("Finale ansehen", Tournament.Key(tour.Rounds - 1, 0));
                 Add(tourShowBracket ? "Siegerehrung" : "Turnierbaum ansehen", null, () => tourShowBracket = !tourShowBracket, null);
                 Add("Hauptmenü", null, () => { tour = null; Go(Scr.Main); }, null);
                 return;
@@ -173,6 +182,7 @@ namespace Sensensturm
             // CPU gegen CPU mit "Ausrechnen" läuft von selbst (TickTourney)
             if (!cpuOnly) Add("Kampf starten!", null, StartTourMatch, null);
             else if (!tour.AutoCpu) { Add("Zuschauen", null, StartTourMatch, null); Add("Ergebnis ausrechnen", null, SimulateTourMatch, null); }
+            if (tour.LastKey >= 0) AddTourReplay("Letztes Match ansehen", tour.LastKey);
             Add("Turnier verlassen", null, () => Go(Scr.Main), null);
             if (sel >= items.Count) sel = 0;
             if (!items[sel].Enabled) sel = NextSel(1);
@@ -598,11 +608,14 @@ namespace Sensensturm
             R.Shadowed(g, mid, f, mid == "VS" ? Gold : Color.FromArgb(220, 220, 240), Renderer.VW / 2f, y + (mid == "VS" ? 9 : 14), true);
         }
 
-        void DrawTourItems(Graphics g)
+        void DrawTourItems(Graphics g) { DrawItemsRow(g, 668); }
+
+        // alle Menüpunkte nebeneinander in einer Zeile
+        void DrawItemsRow(Graphics g, float y)
         {
             int n = items.Count;
-            float w = n > 2 ? 300 : 340, gap = 20, x0 = Renderer.VW / 2f - (n * w + (n - 1) * gap) / 2;
-            for (int i = 0; i < n; i++) DrawItems(g, x0 + i * (w + gap), 668, w, 42, 0, i, 1);
+            float gap = 16, w = Math.Min(n > 2 ? 300 : 340, (Renderer.VW - 60 - (n - 1) * gap) / Math.Max(1, n)), x0 = Renderer.VW / 2f - (n * w + (n - 1) * gap) / 2;
+            for (int i = 0; i < n; i++) DrawItems(g, x0 + i * (w + gap), y, w, 42, 0, i, 1);
         }
 
         // ================================================================ Siegerehrung

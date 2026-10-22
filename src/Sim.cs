@@ -77,6 +77,7 @@ namespace Sensensturm
         public int projKind, projLife, projDir;
         public float projX, projY, projVx, projVy, projDmg, projKbB, projKbG, projAng;
         public float statDamage;
+        public int skin; // Farbvariante (CharDef.Look), 1 bei gleichem Kämpfer wie der Gegner
         // Ultimate-Leiste (0 .. Tuning.UltMax) und Eingabepuffer der Ultimate-Taste
         public float ult;
         public int bufUlt;
@@ -124,6 +125,7 @@ namespace Sensensturm
                 p.airJumps = Tuning.AirJumps;
                 p.wallJumps = Tuning.WallJumps;
                 p.groundJumpAvail = true;
+                p.skin = i == 1 && char1 == char0 ? 1 : 0;
                 s.p[i] = p;
             }
             return s;
@@ -505,6 +507,20 @@ namespace Sensensturm
             if (P.onGround) P.runPhase += Math.Abs(P.vx) * 0.042f;
             Physics(P, (held & Btn.Down) != 0);
             P.prevHeld = held;
+            DecayBuffers(P);
+        }
+
+        // Gepufferte Tasten verfallen nach Tuning.InputBufferFrames. Sonst würde z. B. ein Druck aus dem Hitstun
+        // Sekunden später noch einen Angriff auslösen. Im Trefferstopp läuft der Puffer nicht ab (früher Return oben).
+        static void DecayBuffers(PlayerState P)
+        {
+            if (P.bufJump > 0) P.bufJump--;
+            if (P.bufLight > 0) P.bufLight--;
+            if (P.bufHeavy > 0) P.bufHeavy--;
+            if (P.bufDodge > 0) P.bufDodge--;
+            if (P.bufShield > 0) P.bufShield--;
+            if (P.bufGrab > 0) P.bufGrab--;
+            if (P.bufUlt > 0) P.bufUlt--;
         }
 
         static void GroundMove(PlayerState P, int dx)

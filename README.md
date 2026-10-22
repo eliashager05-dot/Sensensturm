@@ -27,6 +27,14 @@ Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensenst
 
 Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 
+**Spiegelduelle:** Wählen beide Spieler denselben Kämpfer (lokal und im Turnier), bekommt Spieler 2 automatisch eine Farbvariante: *Glut* (Lila Skelett), *Gift* (Blaues Skelett), *Frost* (Brokk) und *Mondjägerin* (Lyra).
+
+**CPU-Gegner:** Leicht, mittel und schwer unterscheiden sich in Reaktion, Tempo und Combos. Hat der Gegner viel Schaden, spielt die CPU gezielt auf K.O.: Sie setzt starke Angriffe ein, bewacht die Kante und schlägt Gegner beim Zurückkommen wieder hinaus. Sich selbst rettet sie mit Sprüngen, Wandsprüngen, Aufschwung und Luft-Dodge.
+
+## Wiederholungen
+Lokale und selbst gehostete Matches werden automatisch aufgezeichnet. Im Ergebnisbildschirm gibt es **Wiederholung ansehen** und **Speichern** (Ordner `replays` neben der .exe). Gespeicherte Wiederholungen findest du im Hauptmenü unter **Wiederholungen**. In der Wiedergabe gilt: Enter = Pause, Links/Rechts = Tempo (1×/2×/4×), Esc = Ende. Im Turnier lassen sich das letzte Match und das Finale noch einmal ansehen, auch ausgerechnete CPU-Matches.
+Eine Wiederholung speichert nur die Eingaben (meist wenige KB) und spielt das Match exakt nach. Dateien aus einer anderen Spielversion werden deshalb abgelehnt. Als Online-Client gibt es keine Aufnahme, weil dort die Eingaben des Hosts fehlen.
+
 ## Turnier (bis zu 16 Spieler)
 Im Hauptmenü **Turnier** wählen:
 1. **Teilnehmer** (2–16), **Leben**, **Zeitlimit** und **Arena** (fest oder zufällig je Match) einstellen.

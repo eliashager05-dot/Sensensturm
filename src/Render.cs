@@ -43,7 +43,7 @@ namespace Sensensturm
         readonly List<PointF>[] trailA = { new List<PointF>(), new List<PointF>() };
         readonly List<PointF>[] trailB = { new List<PointF>(), new List<PointF>() };
 
-        class Ghost { public float X, Y; public int Facing, Char, Life; public Pose Pose; public bool Ground; }
+        class Ghost { public float X, Y; public int Facing, Char, Skin, Life; public Pose Pose; public bool Ground; }
         readonly List<Ghost> ghosts = new List<Ghost>();
 
         int goTimer;
@@ -83,13 +83,13 @@ namespace Sensensturm
         static Pen RPen(Color c, float w) { var p = new Pen(c, w); p.StartCap = LineCap.Round; p.EndCap = LineCap.Round; p.LineJoin = LineJoin.Round; return p; }
 
         // mode: 0 normal, 1 weißer Trefferblitz, 2 Geisterbild
-        Style GetStyle(int ch, int mode, float alpha)
+        Style GetStyle(int ch, int skin, int mode, float alpha)
         {
             int ab = (int)(Math.Max(0, Math.Min(1, alpha)) * 10);
-            int key = ch * 1000 + mode * 100 + ab;
+            int key = skin * 10000 + ch * 1000 + mode * 100 + ab;
             Style s;
             if (styles.TryGetValue(key, out s)) return s;
-            CharDef c = CharDef.All[ch];
+            CharDef c = CharDef.Look(ch, skin);
             float a = ab / 10f;
             Color bone = c.Bone, shade = c.Shade, outl = c.Outline, blade = c.Blade, shaft = c.Shaft, face = c.ShieldFace, rim = c.Rim;
             if (mode == 1) { bone = Color.White; shade = Color.FromArgb(235, 235, 245); blade = Color.White; shaft = Color.FromArgb(220, 220, 230); face = Color.FromArgb(240, 240, 250); rim = Color.White; outl = Color.FromArgb(255, 255, 255); }
@@ -769,8 +769,8 @@ namespace Sensensturm
 
         void DrawFighterPose(Graphics g, PlayerState P, Pose pose, float wx, float wy, int facing, bool grounded, int mode, float alpha, bool record)
         {
-            CharDef c = CharDef.All[P.charId];
-            Style st = GetStyle(P.charId, mode, alpha);
+            CharDef c = CharDef.Look(P.charId, P.skin);
+            Style st = GetStyle(P.charId, P.skin, mode, alpha);
             Rig r = BuildRig(pose, grounded && Math.Abs(pose.Spin % 360) < 1);
             bool shieldFront = P.state == St.Shield;
             bool weaponGlow = P.state == St.Attack && P.atk >= 0 && (P.charge > 0 || Attacks.Of(P).Heavy);
@@ -822,7 +822,7 @@ namespace Sensensturm
             }
             if (rec)
             {
-                int w = CharDef.All[P.charId].Weapon;
+                int w = CharDef.Look(P.charId, P.skin).Weapon;
                 PointF a, b;
                 if (d.FootTrail) { a = r.FF; b = Lp(r.KF, r.FF, 0.4f); }
                 else if (w == Weapon.Hammer) { PointF dd = Dir(pose.Scy, 1); a = Add(r.HF, Mul(dd, 74)); b = Add(r.HF, Mul(dd, 30)); }
@@ -840,7 +840,7 @@ namespace Sensensturm
         {
             var ta = trailA[P.slot]; var tb = trailB[P.slot];
             if (ta.Count < 2) return;
-            CharDef c = CharDef.All[P.charId];
+            CharDef c = CharDef.Look(P.charId, P.skin);
             bool heavy = P.state == St.Attack && P.atk >= 0 && Attacks.Of(P).Heavy;
             for (int k = 1; k < ta.Count; k++)
             {
@@ -857,7 +857,7 @@ namespace Sensensturm
             foreach (PlayerState P in ps)
             {
                 if (!P.projOn) continue;
-                CharDef c = CharDef.All[P.charId];
+                CharDef c = CharDef.Look(P.charId, P.skin);
                 if (P.projKind == 2)
                 {
                     float x = P.projX, y = P.projY;
@@ -914,7 +914,7 @@ namespace Sensensturm
         {
             if (P.state == St.KO) return;
             float wx = P.x + OffX[P.slot], wy = P.y + OffY[P.slot];
-            CharDef c = CharDef.All[P.charId];
+            CharDef c = CharDef.Look(P.charId, P.skin);
             Pose pose = Anim.Get(P);
             bool grounded = P.onGround && P.state != St.Air;
             // Trefferstopp-Zittern
@@ -923,7 +923,7 @@ namespace Sensensturm
             // Geisterbilder für Dash/Dodge/Wirbel
             bool fast = P.state == St.Dash || P.state == St.AirDodge || P.state == St.Dodge || (P.state == St.Hitstun && P.tumble) ||
                         (P.state == St.Attack && (P.atk == Attacks.DAirHeavy || P.atk == Attacks.UAirHeavy || P.atk == Attacks.NHeavy || P.atk == Attacks.DashAtk || P.atk == Attacks.Ult) && P.atkFrame >= Attacks.Of(P).Startup);
-            if (fast && frame % 2 == 0) ghosts.Add(new Ghost { X = wx, Y = wy, Facing = P.facing, Char = P.charId, Life = 12, Pose = pose, Ground = grounded });
+            if (fast && frame % 2 == 0) ghosts.Add(new Ghost { X = wx, Y = wy, Facing = P.facing, Char = P.charId, Skin = P.skin, Life = 12, Pose = pose, Ground = grounded });
 
             // Rankenseil der Bogenschützin
             if (c.Weapon == Weapon.Bow && curPlayers != null)
@@ -1062,7 +1062,7 @@ namespace Sensensturm
             for (int i = ghosts.Count - 1; i >= 0; i--)
             {
                 Ghost gh = ghosts[i];
-                PlayerState dummy = new PlayerState { charId = gh.Char, state = St.Air, slot = 0 };
+                PlayerState dummy = new PlayerState { charId = gh.Char, skin = gh.Skin, state = St.Air, slot = 0 };
                 float a = gh.Life / 12f * 0.35f;
                 DrawFighterPose(g, dummy, gh.Pose, gh.X, gh.Y, gh.Facing, gh.Ground, 2, a, false);
             }
@@ -1343,7 +1343,7 @@ namespace Sensensturm
         public void OnEvent(GameEvent e, GameState s)
         {
             PlayerState P = s.p[Math.Min(1, (int)e.Player)];
-            CharDef c = CharDef.All[P.charId];
+            CharDef c = CharDef.Look(P.charId, P.skin);
             switch (e.Type)
             {
                 case Ev.Hit:
@@ -1359,7 +1359,7 @@ namespace Sensensturm
                         bool heavy = e.V >= 1000;
                         float kb = heavy ? e.V - 1000 : e.V;
                         Sparks(e.X, e.Y, 8 + (int)kb, Color.FromArgb(255, 240, 200), 6 + kb * 0.4f, 2.5f);
-                        Sparks(e.X, e.Y, 5, CharDef.All[s.p[1 - P.slot].charId].Glow, 5, 3);
+                        Sparks(e.X, e.Y, 5, CharDef.Look(s.p[1 - P.slot].charId, s.p[1 - P.slot].skin).Glow, 5, 3);
                         Ring(e.X, e.Y, 30 + kb * 3, Color.White, 12);
                         parts.Add(new Particle { Kind = 1, X = e.X, Y = e.Y, Size = 40 + kb * 3, Life = 8, Max = 8, C = Color.FromArgb(255, 255, 230) });
                         AddShake(Math.Min(18, kb * (heavy ? 0.9f : 0.45f)));
@@ -1402,7 +1402,7 @@ namespace Sensensturm
                         {
                             double a = toCenter + (rng.NextDouble() - 0.5) * 1.6;
                             float sp = 8 + (float)rng.NextDouble() * 12;
-                            parts.Add(new Particle { Kind = i == 0 ? 5 : 3, X = ex, Y = ey, VX = (float)Math.Cos(a) * sp, VY = (float)Math.Sin(a) * sp, Life = 70, Max = 70, Size = i == 0 ? 1.6f : 12 + (float)rng.NextDouble() * 10, Rot = (float)rng.NextDouble() * 360, VR = (float)(rng.NextDouble() - 0.5) * 30, Grav = 0.35f, Drag = 0.97f, C = c.Bone, Text = P.charId.ToString() });
+                            parts.Add(new Particle { Kind = i == 0 ? 5 : 3, X = ex, Y = ey, VX = (float)Math.Cos(a) * sp, VY = (float)Math.Sin(a) * sp, Life = 70, Max = 70, Size = i == 0 ? 1.6f : 12 + (float)rng.NextDouble() * 10, Rot = (float)rng.NextDouble() * 360, VR = (float)(rng.NextDouble() - 0.5) * 30, Grav = 0.35f, Drag = 0.97f, C = c.Bone, Text = (P.charId + P.skin * 100).ToString() });
                         }
                         Text(Math.Max(-900, Math.Min(900, ex)), Math.Max(-700, Math.Min(300, ey)), "K.O.!", Color.White, 80);
                         Flash = 0.35f; flashColor = c.Glow;
@@ -1472,7 +1472,7 @@ namespace Sensensturm
                     break;
                 case Ev.Grab:
                     Sparks(e.X, e.Y, 10, Color.FromArgb(230, 230, 255), 5, 2f);
-                    Ring(e.X, e.Y, 50, CharDef.All[s.p[1 - P.slot].charId].Glow, 12);
+                    Ring(e.X, e.Y, 50, CharDef.Look(s.p[1 - P.slot].charId, s.p[1 - P.slot].skin).Glow, 12);
                     Text(e.X, e.Y - 90, "GEPACKT!", Color.FromArgb(220, 220, 255), 40);
                     AddShake(4);
                     Audio.Play(Sfx.Clank, 0.7f, 0.7f);
@@ -1617,8 +1617,8 @@ namespace Sensensturm
                         }
                     case 5:
                         {
-                            int ch = 0; int.TryParse(p.Text, out ch);
-                            Style st = GetStyle(ch, 0, Math.Min(1, t * 2));
+                            int ch = 0; int.TryParse(p.Text, out ch); int sk = ch / 100; ch %= 100;
+                            Style st = GetStyle(ch, sk, 0, Math.Min(1, t * 2));
                             DrawHead(g, st, CharDef.All[ch].Body, new PointF(p.X, p.Y), p.Rot, p.Size, 0.5f, false);
                             break;
                         }
@@ -1723,7 +1723,7 @@ namespace Sensensturm
             {
                 PlayerState P = s.p[i];
                 if (P.state == St.KO) continue;
-                CharDef c = CharDef.All[P.charId];
+                CharDef c = CharDef.Look(P.charId, P.skin);
                 float x = P.x + OffX[i], y = P.y + OffY[i] - 150;
                 string tag = "P" + (i + 1);
                 var sz = g.MeasureString(tag, FSmall);
@@ -1744,10 +1744,10 @@ namespace Sensensturm
                 PointF sp = W2S(P.x, P.y - 46);
                 if (sp.X > 0 && sp.X < VW && sp.Y > 0 && sp.Y < VH) continue;
                 float cx = Math.Max(40, Math.Min(VW - 40, sp.X)), cy = Math.Max(40, Math.Min(VH - 140, sp.Y));
-                CharDef c = CharDef.All[P.charId];
+                CharDef c = CharDef.Look(P.charId, P.skin);
                 using (var b = new SolidBrush(Color.FromArgb(200, c.Outline))) g.FillEllipse(b, cx - 26, cy - 26, 52, 52);
                 using (var p = new Pen(c.Glow, 3)) g.DrawEllipse(p, cx - 26, cy - 26, 52, 52);
-                DrawHead(g, GetStyle(P.charId, 0, 1), c.Body, new PointF(cx, cy), 0, 1.1f, 0.6f, false);
+                DrawHead(g, GetStyle(P.charId, P.skin, 0, 1), c.Body, new PointF(cx, cy), 0, 1.1f, 0.6f, false);
             }
 
             // Schimmer am unteren Rand (Abgrund)
@@ -1797,7 +1797,7 @@ namespace Sensensturm
             for (int i = 0; i < 2; i++)
             {
                 PlayerState P = s.p[i];
-                CharDef c = CharDef.All[P.charId];
+                CharDef c = CharDef.Look(P.charId, P.skin);
                 float x = i == 0 ? 30 : VW - 330, y = VH - 98, w = 300, h = 84;
                 using (var path = RoundRect(x, y, w, h, 14))
                 {
@@ -1806,7 +1806,7 @@ namespace Sensensturm
                 }
                 // Porträt
                 using (var b = new SolidBrush(Color.FromArgb(160, c.Outline))) g.FillEllipse(b, x + 10, y + 10, 64, 64);
-                DrawHead(g, GetStyle(P.charId, 0, 1), c.Body, new PointF(x + 41, y + 44), 0, 1.75f, 0.7f, P.state == St.Broken);
+                DrawHead(g, GetStyle(P.charId, P.skin, 0, 1), c.Body, new PointF(x + 41, y + 44), 0, 1.75f, 0.7f, P.state == St.Broken);
                 string nm = names != null && names[i] != null ? names[i] : c.Name;
                 Shadowed(g, nm, FHudName, c.Glow, x + 84, y + 6, false);
                 // Schaden
@@ -1900,20 +1900,20 @@ namespace Sensensturm
         }
 
         // kleiner Kopf als Symbol (Turnierbaum), alpha 0..1
-        public void DrawHeadIcon(Graphics g, int ch, float x, float y, float scale, float alpha = 1f)
+        public void DrawHeadIcon(Graphics g, int ch, float x, float y, float scale, float alpha = 1f, int skin = 0)
         {
-            DrawHead(g, GetStyle(ch, 0, alpha), CharDef.All[ch].Body, new PointF(x, y), 0, scale, 0.6f, false);
+            DrawHead(g, GetStyle(ch, skin, 0, alpha), CharDef.All[ch].Body, new PointF(x, y), 0, scale, 0.6f, false);
         }
 
-        public void DrawPortrait(Graphics g, int ch, float x, float y, float scale, int animFrame, bool attackPose)
+        public void DrawPortrait(Graphics g, int ch, float x, float y, float scale, int animFrame, bool attackPose, int skin = 0)
         {
-            var p = new PlayerState { charId = ch, anim = animFrame, facing = 1, onGround = true, state = St.Idle };
+            var p = new PlayerState { charId = ch, skin = skin, anim = animFrame, facing = 1, onGround = true, state = St.Idle };
             Pose pose = Anim.Idle(p);
             if (attackPose) pose = Attacks.SetOf(ch)[Attacks.SHeavy].Wind;
             var gs = g.Save();
             g.TranslateTransform(x, y);
             g.ScaleTransform(scale, Math.Abs(scale));
-            using (var b = new SolidBrush(A(CharDef.All[ch].Glow, 0.12f))) g.FillEllipse(b, -75, -135, 150, 150);
+            using (var b = new SolidBrush(A(CharDef.Look(ch, skin).Glow, 0.12f))) g.FillEllipse(b, -75, -135, 150, 150);
             DrawFighterPose(g, p, pose, 0, 0, 1, true, 0, 1f, false);
             g.Restore(gs);
         }

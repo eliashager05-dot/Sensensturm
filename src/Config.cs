@@ -285,7 +285,7 @@ namespace Sensensturm
             if (Opponent < 0 || Opponent > 4) Opponent = 0;
             Stage = StageDef.Valid(Stage);
             if (P1Char < 0 || P1Char >= CharDef.Count) P1Char = 0;
-            if (P2Char < 0 || P2Char >= CharDef.Count || P2Char == P1Char) P2Char = CharDef.Next(P1Char, 1, P1Char);
+            if (P2Char < 0 || P2Char >= CharDef.Count) P2Char = CharDef.Next(P1Char, 1, P1Char);
             Volume = Math.Max(0, Math.Min(10, Volume));
             Stocks = Math.Max(1, Math.Min(9, Stocks));
             if (Port < 1024 || Port > 65535) Port = 7777;

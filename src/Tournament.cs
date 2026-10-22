@@ -24,6 +24,10 @@ namespace Sensensturm
         public int[] OutTime;      // je Teilnehmer: Zeitpunkt des Ausscheidens (-1 = noch dabei)
         public int Stocks = 3, Minutes = 3, Stage = -1; // Stage -1 = zufällig je Match
         public bool AutoCpu = true;                     // CPU gegen CPU automatisch ausrechnen
+        public readonly Dictionary<int, Replay> Replays = new Dictionary<int, Replay>(); // Wiederholung je Paarung (Key)
+        public int LastKey = -1;                        // zuletzt entschiedene Paarung
+
+        public static int Key(int r, int m) { return r * 64 + m; }
 
         static readonly string[] cpuNames =
         {
@@ -93,6 +97,7 @@ namespace Sensensturm
             int a = Slot[r][2 * m], b = Slot[r][2 * m + 1];
             if (winner != a && winner != b) throw new ArgumentException("Sieger gehört nicht zur Paarung");
             Slot[r + 1][m] = winner;
+            LastKey = Key(r, m);
             FillTime[r + 1][m] = now;
             int loser = winner == a ? b : a;
             if (loser >= 0) OutTime[loser] = now;
@@ -103,17 +108,20 @@ namespace Sensensturm
         {
             int ia = Slot[r][2 * m], ib = Slot[r][2 * m + 1];
             Entrant a = E[ia], b = E[ib];
-            var s = GameState.NewMatch(a.Char, b.Char, Stocks, Minutes, 0);
-            var ba = new Bot(Math.Max(1, a.Cpu));
-            var bb = new Bot(Math.Max(1, b.Cpu));
+            var s = GameState.NewMatch(a.Char, b.Char, Stocks, Minutes, Stage < 0 ? rng.Next(StageDef.Count) : Stage);
+            var rec = Replay.Begin(s, a.Name, b.Name);
+            var ba = new Bot(Math.Max(1, a.Cpu), rng.Next());
+            var bb = new Bot(Math.Max(1, b.Cpu), rng.Next());
             int cap = 60 * 60 * (Minutes > 0 ? Minutes + 1 : 6);
             for (int t = 0; t < cap && s.phase != GameState.Over; t++)
             {
                 int h0, p0, h1, p1;
                 ba.Think(s, 0, out h0, out p0);
                 bb.Think(s, 1, out h1, out p1);
+                rec.Add(h0, p0, h1, p1);
                 Sim.Step(s, new[] { h0, h1 }, new[] { p0, p1 }, null, false);
             }
+            Replays[Key(r, m)] = rec;
             return WinnerOf(s, rng) == 0 ? ia : ib;
         }
 

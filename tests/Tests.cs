@@ -26,6 +26,7 @@ namespace Sensensturm
             fails += TestCombos();
             fails += TestNewMoves();
             fails += TestTournament();
+            fails += TestPolish();
             fails += TestRecovery();
             fails += TestStages();
             fails += Screenshots();
@@ -920,6 +921,16 @@ namespace Sensensturm
                 r.Tick(); r.UpdateCamera(s);
             }
             Shot(r, s, "shot_new2", new[] { "Brokk", "Lyra" });
+            // Spiegelduelle: Spieler 2 bekommt die Farbvariante
+            for (int mc = 0; mc < CharDef.Count; mc++)
+            {
+                s = GameState.NewMatch(mc, mc, 3, 0, mc % StageDef.Count); s.phase = GameState.Fight; s.phaseTimer = 0;
+                s.p[0].x = -90; s.p[1].x = 90; s.p[1].facing = -1;
+                r.ClearFx();
+                for (int t = 0; t < 20; t++) { Sim.Step(s, new[] { 0, 0 }, new[] { 0, 0 }, null, false); r.Tick(); r.UpdateCamera(s); }
+                r.SnapCamera(s);
+                Shot(r, s, "shot_mirror" + mc, new[] { "Spieler 1", "Spieler 2" });
+            }
             // Ultimate beim Ausholen (Zeitstopp) und kurz nach dem Einschlag
             foreach (int uc in new[] { 0, 2, 3 })
             {
@@ -975,6 +986,8 @@ namespace Sensensturm
             string champ = game.DebugPlayTourMatch(1);
             int sf = 0;
             Check(champ == "Spieler 1", "Turnier im Spiel: Match gespielt, Sieger \"" + champ + "\" in den Baum übernommen", ref sf);
+            string rerr = game.DebugReplayCheck(System.IO.Path.Combine(outDir, "test_replay.ssr"));
+            Check(rerr == "", "Wiederholung: CPU-Match im Spiel aufgenommen, Byte für Byte nachsimuliert (auch nach Speichern/Laden), abgespielt und zurück zum Ergebnis" + (rerr == "" ? "" : " – " + rerr), ref sf);
             game.DebugTournament(6, false, 160);
             shotGame("shot_tour_human");
             game.DebugFinishTournament();
@@ -982,7 +995,106 @@ namespace Sensensturm
             shotGame("shot_tour_final_anim");
             game.DebugFrames(140);
             shotGame("shot_tour_champion");
+            // Ergebnisbildschirm mit Wiederholungs-Knöpfen und Wiedergabe-Ansicht
+            game.DebugReplayCheck(System.IO.Path.Combine(outDir, "test_replay.ssr"));
+            game.DebugFrames(2);
+            shotGame("shot_results_replay");
+            game.DebugWatchLastReplay();
+            game.DebugFrames(500);
+            shotGame("shot_replay");
+            game.DebugScreen(Scr.Replays);
+            game.DebugFrames(3);
+            shotGame("shot_replay_list");
             return sf;
+        }
+
+        static int TestPolish()
+        {
+            Console.WriteLine("Eingabepuffer, CPU, Farbvarianten, Wiederholungen:");
+            int f = 0;
+            // Eingabepuffer verfällt: Druck mitten im langen Hitstun löst danach keinen Angriff aus
+            {
+                var s = Duel(0, 1, 80);
+                s.p[0].state = St.Hitstun; s.p[0].hitstun = 30;
+                bool attacked = false;
+                Play(s, 50, t => { if (s.p[0].state == St.Attack) attacked = true; return new[] { t == 5 ? Btn.Light : 0, 0 }; });
+                Check(!attacked, "Gedrückt im Hitstun (25 Frames vor Ende): kein verspäteter Angriff", ref f);
+                s = Duel(0, 1, 80);
+                s.p[0].state = St.Hitstun; s.p[0].hitstun = 30;
+                attacked = false;
+                Play(s, 50, t => { if (s.p[0].state == St.Attack) attacked = true; return new[] { t == 27 ? Btn.Light : 0, 0 }; });
+                Check(attacked, "Gedrückt kurz vor Ende des Hitstuns: Angriff kommt (Puffer " + Tuning.InputBufferFrames + " Frames)", ref f);
+            }
+            // CPU: gegen die Trainingspuppe alle Leben, ohne selbst abzustürzen; schwer schlägt leicht meistens
+            {
+                int kos = 0, self = 0;
+                for (int c = 0; c < CharDef.Count; c++)
+                {
+                    var s = GameState.NewMatch(c, (c + 1) % CharDef.Count, 3, 3, 0); s.phase = GameState.Fight; s.phaseTimer = 0;
+                    var b0 = new Bot(3, 11 + c); var b1 = new Bot(0, 1);
+                    var ev = new List<GameEvent>();
+                    for (int t = 0; t < 60 * 60 * 3 && s.phase != GameState.Over; t++)
+                    {
+                        int h0, p0, h1, p1; b0.Think(s, 0, out h0, out p0); b1.Think(s, 1, out h1, out p1);
+                        ev.Clear(); Sim.Step(s, new[] { h0, h1 }, new[] { p0, p1 }, ev, false);
+                        foreach (var e in ev) if (e.Type == Ev.KO) { if (e.Player == 1) kos++; else self++; }
+                    }
+                }
+                Check(kos == 3 * CharDef.Count && self == 0, "CPU schwer gegen Puppe: " + kos + "/" + 3 * CharDef.Count + " K.O.s, eigene Abstürze " + self, ref f);
+                int wins = 0;
+                var rng = new Random(3);
+                for (int seed = 1; seed <= 12; seed++)
+                {
+                    var s = GameState.NewMatch(seed % 4, seed % 4, 3, 3, 0); // Spiegelduell: nur die Stufe entscheidet
+                    var b0 = new Bot(3, seed * 7); var b1 = new Bot(1, seed * 13 + 1);
+                    for (int t = 0; t < 60 * 60 * 4 && s.phase != GameState.Over; t++)
+                    {
+                        int h0, p0, h1, p1; b0.Think(s, 0, out h0, out p0); b1.Think(s, 1, out h1, out p1);
+                        Sim.Step(s, new[] { h0, h1 }, new[] { p0, p1 }, null, false);
+                    }
+                    if (Tournament.WinnerOf(s, rng) == 0) wins++;
+                }
+                Check(wins >= 8, "CPU schwer gegen leicht (gleicher Kämpfer): " + wins + "/12 Siege", ref f);
+            }
+            // Farbvariante nur im Spiegelduell, und nur für Spieler 2
+            {
+                var a = GameState.NewMatch(2, 2, 3, 0); var b = GameState.NewMatch(0, 1, 3, 0);
+                Check(a.p[0].skin == 0 && a.p[1].skin == 1 && b.p[1].skin == 0 && CharDef.Look(2, 1).Glow != CharDef.Look(2, 0).Glow,
+                    "Spiegelduell: Spieler 2 bekommt die Variante \"" + CharDef.Look(2, 1).Name + "\"", ref f);
+            }
+            // Wiederholung: gleiche Eingaben -> exakt gleicher Ablauf; Datei aus anderer Version wird abgelehnt
+            {
+                var s = GameState.NewMatch(3, 2, 3, 2, 1); s.phase = GameState.Fight; s.phaseTimer = 0;
+                var rp = Replay.Begin(s, "A", "B");
+                var b0 = new Bot(3, 5); var b1 = new Bot(2, 6);
+                for (int t = 0; t < 3000; t++)
+                {
+                    int h0, p0, h1, p1; b0.Think(s, 0, out h0, out p0); b1.Think(s, 1, out h1, out p1);
+                    rp.Add(h0, p0, h1, p1);
+                    Sim.Step(s, new[] { h0, h1 }, new[] { p0, p1 }, null, false);
+                }
+                var r2 = rp.StartState();
+                for (int t = 0; t < rp.Ticks; t++)
+                {
+                    int h0, p0, h1, p1; rp.Get(t, out h0, out p0, out h1, out p1);
+                    Sim.Step(r2, new[] { h0, h1 }, new[] { p0, p1 }, null, false);
+                }
+                var m1 = new System.IO.MemoryStream(); s.Write(new System.IO.BinaryWriter(m1));
+                var m2 = new System.IO.MemoryStream(); r2.Write(new System.IO.BinaryWriter(m2));
+                bool same = Convert.ToBase64String(m1.ToArray()) == Convert.ToBase64String(m2.ToArray());
+                string path = System.IO.Path.Combine(outDir, "test_replay2.ssr");
+                rp.Save(path);
+                long size = new System.IO.FileInfo(path).Length;
+                // Fingerabdruck verfälschen (Byte 4..7 nach dem Entpacken) -> muss abgelehnt werden
+                byte[] raw;
+                using (var fs = System.IO.File.OpenRead(path)) using (var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionMode.Decompress)) using (var ms = new System.IO.MemoryStream()) { gz.CopyTo(ms); raw = ms.ToArray(); }
+                raw[4] ^= 0xFF;
+                using (var fs = System.IO.File.Create(path)) using (var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionMode.Compress)) gz.Write(raw, 0, raw.Length);
+                bool rejected = false;
+                try { Replay.Load(path); } catch (System.IO.InvalidDataException) { rejected = true; }
+                Check(same && rejected && size < 20000, "Wiederholung: 3000 Frames identisch nachsimuliert, Datei " + size / 1024.0 + " KB, fremde Version abgelehnt", ref f);
+            }
+            return f;
         }
     }
 }

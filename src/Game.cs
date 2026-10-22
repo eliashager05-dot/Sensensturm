@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Sensensturm
 {
-    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney }
+    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney, Replays }
     public enum Mode { Local, Host, Client }
 
     class Item
@@ -200,7 +200,7 @@ namespace Sensensturm
             if (host != null) host.Messages.Clear();
             if (toastTimer > 0) toastTimer--;
 
-            if (scr == Scr.Match) TickMatch();
+            if (scr == Scr.Match) { if (replay != null) TickReplay(); else TickMatch(); }
             else TickMenus();
 
             R.Tick();
@@ -257,8 +257,8 @@ namespace Sensensturm
                 {
                     case MenuKey.Up: sel = NextSel(-1); Audio.Play(Sfx.Menu, 0.5f); break;
                     case MenuKey.Down: sel = NextSel(1); Audio.Play(Sfx.Menu, 0.5f); break;
-                    case MenuKey.Left: if (items[sel].Change != null) { items[sel].Change(-1); Audio.Play(Sfx.Menu, 0.5f); } else if (scr == Scr.Controls && sel < Btn.Count) ctrlCol = 0; break;
-                    case MenuKey.Right: if (items[sel].Change != null) { items[sel].Change(1); Audio.Play(Sfx.Menu, 0.5f); } else if (scr == Scr.Controls && sel < Btn.Count) ctrlCol = 1; break;
+                    case MenuKey.Left: if (items[sel].Change != null) { items[sel].Change(-1); Audio.Play(Sfx.Menu, 0.5f); } else if (scr == Scr.Controls && sel < Btn.Count) ctrlCol = 0; else if (scr == Scr.Tourney) { sel = NextSel(-1); Audio.Play(Sfx.Menu, 0.5f); } break;
+                    case MenuKey.Right: if (items[sel].Change != null) { items[sel].Change(1); Audio.Play(Sfx.Menu, 0.5f); } else if (scr == Scr.Controls && sel < Btn.Count) ctrlCol = 1; else if (scr == Scr.Tourney) { sel = NextSel(1); Audio.Play(Sfx.Menu, 0.5f); } break;
                     case MenuKey.Ok: Activate(items[sel], 1, false); break;
                     case MenuKey.Back: Back(); break;
                 }
@@ -306,6 +306,7 @@ namespace Sensensturm
                 case Scr.Combos: Go(Scr.Settings); break;
                 case Scr.TourneySetup: Go(Scr.Main); break;
                 case Scr.Tourney: Go(Scr.Main); break;
+                case Scr.Replays: Go(Scr.Main); break;
             }
         }
 
@@ -338,6 +339,7 @@ namespace Sensensturm
                     Add("Online-Spiel beitreten", null, () => { LeaveClient(); Go(Scr.OnlineJoin); }, null);
                     Add("LAN-Spiel erstellen", null, StartHost, null);
                     Add("LAN-Spiel beitreten", null, () => { Go(Scr.Join); OpenJoin(); }, null);
+                    Add("Wiederholungen", null, () => { replayFiles = null; Go(Scr.Replays); }, null);
                     Add("Einstellungen", null, () => { nameText = Settings.PlayerName; setPortText = Settings.Port.ToString(); Go(Scr.Settings); }, null);
                     Add("Spiel verlassen", null, () => Running = false, null);
                     break;
@@ -345,8 +347,8 @@ namespace Sensensturm
                     {
                         string[] opp = { "Spieler 2 (selber PC)", "CPU - leicht", "CPU - mittel", "CPU - schwer", "Trainingspuppe (Combos üben)" };
                         Add("Gegner", opp[Settings.Opponent], null, d => Settings.Opponent = Cycle(Settings.Opponent, d, 5));
-                        Add("Spieler 1", CharDef.All[Settings.P1Char].Name + " (" + CharDef.All[Settings.P1Char].TypeName + ")", null, d => Settings.P1Char = CharDef.Next(Settings.P1Char, d, Settings.P2Char));
-                        Add(Settings.Opponent == 0 ? "Spieler 2" : Settings.Opponent == 4 ? "Puppe" : "CPU", CharDef.All[Settings.P2Char].Name + " (" + CharDef.All[Settings.P2Char].TypeName + ")", null, d => Settings.P2Char = CharDef.Next(Settings.P2Char, d, Settings.P1Char));
+                        Add("Spieler 1", CharDef.All[Settings.P1Char].Name + " (" + CharDef.All[Settings.P1Char].TypeName + ")", null, d => Settings.P1Char = CharDef.Next(Settings.P1Char, d, -1));
+                        Add(Settings.Opponent == 0 ? "Spieler 2" : Settings.Opponent == 4 ? "Puppe" : "CPU", CharDef.Look(Settings.P2Char, Settings.P2Char == Settings.P1Char ? 1 : 0).Name + " (" + CharDef.All[Settings.P2Char].TypeName + ")", null, d => Settings.P2Char = CharDef.Next(Settings.P2Char, d, -1));
                         Add("Leben", Settings.Stocks.ToString(), null, d => Settings.Stocks = Math.Max(1, Math.Min(9, Settings.Stocks + d)));
                         Add("Zeitlimit", MinutesText(Settings.MatchMinutes), null, d => Settings.MatchMinutes = NextMinutes(Settings.MatchMinutes, d));
                         Add("Arena", StageDef.Names[Settings.Stage], null, d => Settings.Stage = Cycle(Settings.Stage, d, StageDef.Count));
@@ -428,6 +430,9 @@ namespace Sensensturm
                     break;
                 case Scr.Tourney:
                     BuildTourneyItems();
+                    break;
+                case Scr.Replays:
+                    BuildReplayItems();
                     break;
                 case Scr.Combos:
                     Add("Waffe", Weapon.Names[comboWeapon], null, d => comboWeapon = ((comboWeapon + d) % 3 + 3) % 3);
@@ -562,6 +567,7 @@ namespace Sensensturm
             resultsShown = false;
             comboView = false;
             R.ClearFx();
+            BeginRecording();
             R.SnapCamera(state);
             scr = Scr.Match;
             sel = 0;
@@ -672,6 +678,7 @@ namespace Sensensturm
                     if (bot != null) bot.Think(state, 1, out h1, out p1);
                     else In.Sample(1, In.PadIndex(1), out h1, out p1);
                     if (menuOpen) { if (bot0 == null) h0 = p0 = 0; if (bot == null) h1 = p1 = 0; }
+                    Record(h0, p0, h1, p1);
                     Sim.Step(state, new[] { h0, h1 }, new[] { p0, p1 }, evs, false);
                     foreach (GameEvent e in evs) R.OnEvent(e, state);
                     break;
@@ -681,6 +688,7 @@ namespace Sensensturm
                     In.Sample(-1, In.PadIndex(0), out h0, out p0);
                     if (menuOpen) h0 = p0 = 0;
                     host.TakeInput(out h1, out p1);
+                    Record(h0, p0, h1, p1);
                     Sim.Step(state, new[] { h0, h1 }, new[] { p0, p1 }, evs, false);
                     host.SendSnapshot(state, evs);
                     foreach (GameEvent e in evs) R.OnEvent(e, state);
@@ -719,6 +727,11 @@ namespace Sensensturm
             items.Clear();
             if (over)
             {
+                if (lastReplay != null && mode != Mode.Client)
+                {
+                    Add("Wiederholung ansehen", null, WatchLastReplay, null);
+                    Add("Speichern", null, SaveLastReplay, null);
+                }
                 if (tourMatch)
                     Add("Weiter zum Turnierbaum", null, TourMatchDone, null);
                 else if (mode == Mode.Local)
@@ -765,8 +778,8 @@ namespace Sensensturm
             if (!swallowMenu)
                 foreach (MenuKey k in In.Menu)
                 {
-                    if (k == MenuKey.Up) { sel = NextSel(-1); Audio.Play(Sfx.Menu, 0.5f); }
-                    else if (k == MenuKey.Down) { sel = NextSel(1); Audio.Play(Sfx.Menu, 0.5f); }
+                    if (k == MenuKey.Up || k == MenuKey.Left) { sel = NextSel(-1); Audio.Play(Sfx.Menu, 0.5f); }
+                    else if (k == MenuKey.Down || k == MenuKey.Right) { sel = NextSel(1); Audio.Play(Sfx.Menu, 0.5f); }
                     else if (k == MenuKey.Ok) { pauseSel = sel; Activate(items[sel], 1, false); In.Menu.Clear(); return; }
                     else if (k == MenuKey.Back && !over) { paused = false; In.Menu.Clear(); return; }
                 }
@@ -798,7 +811,14 @@ namespace Sensensturm
             g.SetClip(new RectangleF(0, 0, Renderer.VW, Renderer.VH));
 
             itemRects.Clear();
-            if (scr == Scr.Match && state != null)
+            if (scr == Scr.Match && state != null && replay != null)
+            {
+                R.DrawWorld(g, state, false);
+                R.UltKeys[0] = R.UltKeys[1] = "";
+                R.DrawHud(g, state, names);
+                DrawReplayOverlay(g);
+            }
+            else if (scr == Scr.Match && state != null)
             {
                 R.DrawWorld(g, state, Settings.ShowHitboxes);
                 // Ultimate-Taste nur für Spieler an diesem PC anzeigen
@@ -935,14 +955,14 @@ namespace Sensensturm
                     DrawTitle(g, "Ein Plattform-Kampfspiel mit Sensen und Schilden");
                     R.DrawPortrait(g, 0, 210, 600, 2.1f, frame, false);
                     R.DrawPortrait(g, 1, 1070, 600, -2.1f, frame + 40, false);
-                    DrawItems(g, 400, 182, 480, 44, 7);
+                    DrawItems(g, 400, 172, 480, 40, 6);
                     Line(g, "Steuerung: Pfeiltasten/WASD · Enter/Leertaste · Esc  —  oder Maus / Controller", 350, 690, dim, R.FTiny);
                     break;
                 case Scr.Local:
                     DrawTitle(g, "Lokal spielen");
                     DrawItems(g, 330, 160, 620, 44, 6);
                     DrawCharCard(g, Settings.P1Char, 20, 150, "SPIELER 1", false);
-                    DrawCharCard(g, Settings.P2Char, 960, 150, Settings.Opponent == 0 ? "SPIELER 2" : Settings.Opponent == 4 ? "TRAININGSPUPPE" : "CPU", true);
+                    DrawCharCard(g, Settings.P2Char, 960, 150, Settings.Opponent == 0 ? "SPIELER 2" : Settings.Opponent == 4 ? "TRAININGSPUPPE" : "CPU", true, Settings.P2Char == Settings.P1Char ? 1 : 0);
                     Panel(g, 230, 580, 820, 110);
                     Line(g, "Spieler 1:  A/D · W/Leertaste springen · J/Linksklick leicht · K schwer · L/Shift Dodge · H/Rechtsklick Schild · E greifen", 250, 592, info, R.FTiny);
                     Line(g, "Spieler 2:  Pfeiltasten (Hoch = springen) · Num1 leicht · Num2 schwer · Num3 Dodge · Num5 Schild · Num4 greifen", 250, 616, info, R.FTiny);
@@ -1041,6 +1061,9 @@ namespace Sensensturm
                 case Scr.Tourney:
                     DrawTourney(g);
                     break;
+                case Scr.Replays:
+                    DrawReplayList(g);
+                    break;
                 case Scr.Controls:
                     DrawTitle(g, "Steuerung Spieler " + (ctrlPlayer + 1));
                     DrawItems(g, 300, 140, 680, 40, 4);
@@ -1063,9 +1086,9 @@ namespace Sensensturm
             return ShortKey(a) + "/" + ShortKey(b);
         }
 
-        void DrawCharCard(Graphics g, int ch, float x, float y, string label, bool mirror)
+        void DrawCharCard(Graphics g, int ch, float x, float y, string label, bool mirror, int skin = 0)
         {
-            CharDef c = CharDef.All[ch];
+            CharDef c = CharDef.Look(ch, skin);
             float w = 300, h = 420;
             using (var path = Renderer.RoundRect(x, y, w, h, 14))
             {
@@ -1073,7 +1096,7 @@ namespace Sensensturm
                 using (var p = new Pen(Color.FromArgb(220, c.Glow), 2.5f)) g.DrawPath(p, path);
             }
             Line(g, label, x + 16, y + 10, Color.FromArgb(200, 210, 200, 235), R.FTiny);
-            R.DrawPortrait(g, ch, x + w / 2, y + 240, mirror ? -1.15f : 1.15f, frame + ch * 17, false);
+            R.DrawPortrait(g, ch, x + w / 2, y + 240, mirror ? -1.15f : 1.15f, frame + ch * 17, false, skin);
             Line(g, c.Name, x + 16, y + 26, c.Glow, R.FMed);
             Line(g, c.Title + "  ·  Typ: " + c.TypeName, x + 16, y + 60, Color.FromArgb(220, 220, 210, 240), R.FTiny);
             string[] st = { "Tempo", "Kraft", "Gewicht", "Reichweite" };
@@ -1174,7 +1197,7 @@ namespace Sensensturm
         {
             using (var b = new SolidBrush(Color.FromArgb(238, 6, 2, 14))) g.FillRectangle(b, 0, 0, Renderer.VW, Renderer.VH);
             PlayerState P = state.p[comboViewSlot];
-            CharDef c = CharDef.All[P.charId];
+            CharDef c = CharDef.Look(P.charId, P.skin);
             R.Shadowed(g, "COMBOS & ANGRIFFE", R.FBig, Color.White, Renderer.VW / 2f, 12, true);
             R.Shadowed(g, "<  " + (names[comboViewSlot] ?? "P" + (comboViewSlot + 1)) + "  ·  " + c.Name + " (" + c.TypeName + ")  >", R.FSmall, c.Glow, Renderer.VW / 2f, 62, true);
             // im lokalen 2-Spieler-Modus spielt P2 mit der eigenen Belegung
@@ -1202,7 +1225,7 @@ namespace Sensensturm
             else
             {
                 head = (names[state.winner] ?? CharDef.All[state.p[state.winner].charId].Name).ToUpper() + " GEWINNT!";
-                hc = CharDef.All[state.p[state.winner].charId].Glow;
+                hc = CharDef.Look(state.p[state.winner].charId, state.p[state.winner].skin).Glow;
             }
             R.Shadowed(g, head, R.FTitle, hc, Renderer.VW / 2f, 70, true);
             if (tourMatch && tour != null && state.winner >= 0)
@@ -1210,13 +1233,13 @@ namespace Sensensturm
                 string next = tourR + 1 >= tour.Rounds ? "GEWINNT DAS TURNIER!" : "zieht ins " + Tournament.RoundName(tour.Size, tourR + 1) + " ein!";
                 R.Shadowed(g, next, R.FMed, Color.FromArgb(255, 225, 140), Renderer.VW / 2f, 424, true);
             }
-            if (state.winner >= 0) R.DrawPortrait(g, state.p[state.winner].charId, Renderer.VW / 2f, 400, 1.6f, frame, true);
+            if (state.winner >= 0) R.DrawPortrait(g, state.p[state.winner].charId, Renderer.VW / 2f, 400, 1.6f, frame, true, state.p[state.winner].skin);
             for (int i = 0; i < 2; i++)
             {
                 PlayerState P = state.p[i];
                 float x = i == 0 ? 150 : 850;
                 Panel(g, x, 170, 280, 210);
-                CharDef c = CharDef.All[P.charId];
+                CharDef c = CharDef.Look(P.charId, P.skin);
                 Line(g, names[i] ?? c.Name, x + 20, 182, c.Glow, R.FMed);
                 Line(g, c.Name, x + 20, 216, Color.FromArgb(180, 200, 190, 220), R.FTiny);
                 Line(g, "Treffer:  " + P.statHits, x + 20, 245, Color.White);
@@ -1226,7 +1249,7 @@ namespace Sensensturm
             }
             if (mode == Mode.Client)
                 R.Shadowed(g, "Warte auf den Host (Revanche oder Lobby) ...", R.FMed, Color.FromArgb(255, 200, 120), Renderer.VW / 2f, 520, true);
-            DrawItems(g, 440, mode == Mode.Client ? 570 : 520, 400, 52, 10);
+            DrawItemsRow(g, mode == Mode.Client ? 600 : 560);
         }
 
         public void DebugScreen(Scr s) { scr = s; sel = 0; }
