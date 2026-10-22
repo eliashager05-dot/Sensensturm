@@ -88,6 +88,10 @@ namespace Sensensturm
         [Desc("Abklingzeit des Verfolgungs-Dodges")] public static int ChaseDodgeCooldown = 24;
         [Desc("Maximale Haltezeit beim Greifen, danach automatischer Wurf")] public static int GrabHoldMax = 40;
         [Desc("Kantenhilfe: so viele Pixel unter der Oberkante wird man auf die Bühne gezogen")] public static float LedgeAssist = 34f;
+        [Desc("Ultimate: benötigte Leistenpunkte")] public static float UltMax = 100f;
+        [Desc("Ultimate: Leistenpunkte pro verursachtem Schadenspunkt")] public static float UltGainDeal = 1f;
+        [Desc("Ultimate: Leistenpunkte pro erlittenem Schadenspunkt")] public static float UltGainTake = 0.6f;
+        [Desc("Ultimate: so viele Frames wird der Gegner beim Auslösen eingefroren (Zeitstopp)")] public static int UltFreeze = 20;
         [Desc("Version dieser Datei (nicht ändern)")] public static int TuningVersion = CurrentVersion;
         public const int CurrentVersion = 2;
         [Desc("Frames bis zum Respawn nach einem KO")] public static int RespawnDelay = 70;
@@ -100,7 +104,8 @@ namespace Sensensturm
             {
                 if (fields == null)
                 {
-                    fields = typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static);
+                    // ohne Konstanten (CurrentVersion): die lassen sich nicht setzen und brachen früher Laden/Übertragen mittendrin ab
+                    fields = Array.FindAll(typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static), f => !f.IsLiteral);
                     Array.Sort(fields, (a, b) => string.CompareOrdinal(a.Name, b.Name));
                 }
                 return fields;
@@ -153,7 +158,7 @@ namespace Sensensturm
                 sb.AppendLine("# Datei löschen, um die Standardwerte wiederherzustellen.");
                 sb.AppendLine("# Im Menü 'Einstellungen > Spielwerte neu laden' werden Änderungen ohne Neustart übernommen.");
                 sb.AppendLine();
-                FieldInfo[] ordered = typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static);
+                FieldInfo[] ordered = Array.FindAll(typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static), f => !f.IsLiteral);
                 Array.Sort(ordered, (a, b) => a.MetadataToken.CompareTo(b.MetadataToken));
                 foreach (FieldInfo f in ordered)
                 {
@@ -219,13 +224,13 @@ namespace Sensensturm
             Keys[] a, b;
             if (p == 0)
             {
-                a = new Keys[] { Keys.A, Keys.D, Keys.W, Keys.S, Keys.Space, Keys.J, Keys.K, Keys.L, Keys.H, Keys.E };
-                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.W, Keys.LButton, Keys.MButton, Keys.ShiftKey, Keys.RButton, Keys.None };
+                a = new Keys[] { Keys.A, Keys.D, Keys.W, Keys.S, Keys.Space, Keys.J, Keys.K, Keys.L, Keys.H, Keys.E, Keys.Q };
+                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.W, Keys.LButton, Keys.MButton, Keys.ShiftKey, Keys.RButton, Keys.None, Keys.None };
             }
             else
             {
-                a = new Keys[] { Keys.Left, Keys.Right, Keys.Up, Keys.Down, Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad5, Keys.NumPad4 };
-                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.Up, Keys.OemPeriod, Keys.OemMinus, Keys.End, Keys.PageDown, Keys.Oemcomma };
+                a = new Keys[] { Keys.Left, Keys.Right, Keys.Up, Keys.Down, Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad5, Keys.NumPad4, Keys.NumPad6 };
+                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.Up, Keys.OemPeriod, Keys.OemMinus, Keys.End, Keys.PageDown, Keys.Oemcomma, Keys.None };
             }
             for (int i = 0; i < Btn.Count; i++) { Bind[p, i, 0] = a[i]; Bind[p, i, 1] = b[i]; }
         }
@@ -280,7 +285,7 @@ namespace Sensensturm
             if (Opponent < 0 || Opponent > 4) Opponent = 0;
             Stage = StageDef.Valid(Stage);
             if (P1Char < 0 || P1Char >= CharDef.Count) P1Char = 0;
-            if (P2Char < 0 || P2Char >= CharDef.Count || P2Char == P1Char) P2Char = CharDef.Next(P1Char, 1, P1Char);
+            if (P2Char < 0 || P2Char >= CharDef.Count) P2Char = CharDef.Next(P1Char, 1, P1Char);
             Volume = Math.Max(0, Math.Min(10, Volume));
             Stocks = Math.Max(1, Math.Min(9, Stocks));
             if (Port < 1024 || Port > 65535) Port = 7777;

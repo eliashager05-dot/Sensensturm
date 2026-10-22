@@ -38,7 +38,7 @@ namespace Sensensturm
     {
         public const byte Hit = 1, Block = 2, Parry = 3, ShieldBreak = 4, KO = 5, Jump = 6, AirJump = 7, Land = 8, Dash = 9, Dodge = 10,
             Swing = 11, Clank = 12, Countdown = 13, Go = 14, ChargeFull = 15, Shockwave = 16, WallJump = 17, GameOver = 18, Respawn = 19, Bounce = 20,
-            Grab = 21, Throw = 22, Perfect = 23, Shoot = 24, ProjBreak = 25;
+            Grab = 21, Throw = 22, Perfect = 23, Shoot = 24, ProjBreak = 25, Ult = 26, UltStrike = 27, UltReady = 28;
     }
 
     public class GameEvent
@@ -77,6 +77,10 @@ namespace Sensensturm
         public int projKind, projLife, projDir;
         public float projX, projY, projVx, projVy, projDmg, projKbB, projKbG, projAng;
         public float statDamage;
+        public int skin; // Farbvariante (CharDef.Look), 1 bei gleichem Kämpfer wie der Gegner
+        // Ultimate-Leiste (0 .. Tuning.UltMax) und Eingabepuffer der Ultimate-Taste
+        public float ult;
+        public int bufUlt;
 
         public PlayerState Clone() { return (PlayerState)MemberwiseClone(); }
         public bool Alive { get { return state != St.KO; } }
@@ -121,6 +125,7 @@ namespace Sensensturm
                 p.airJumps = Tuning.AirJumps;
                 p.wallJumps = Tuning.WallJumps;
                 p.groundJumpAvail = true;
+                p.skin = i == 1 && char1 == char0 ? 1 : 0;
                 s.p[i] = p;
             }
             return s;
@@ -203,7 +208,7 @@ namespace Sensensturm
             P.facing = side;
             P.jumpCut = true;
         }
-        const int ComboKeys = Btn.Light | Btn.Heavy | Btn.Jump | Btn.Dodge | Btn.Grab;
+        const int ComboKeys = Btn.Light | Btn.Heavy | Btn.Jump | Btn.Dodge | Btn.Grab | Btn.Ult;
 
         static CharDef C(PlayerState p) { return CharDef.All[p.charId]; }
 
@@ -295,6 +300,7 @@ namespace Sensensturm
             if ((pressed & Btn.Dodge) != 0) P.bufDodge = buf;
             if ((pressed & Btn.Shield) != 0) P.bufShield = buf;
             if ((pressed & Btn.Grab) != 0) P.bufGrab = buf;
+            if ((pressed & Btn.Ult) != 0) P.bufUlt = buf;
             // Zeitpunkt des ersten Combo-Tastendrucks nach einem Treffer merken (für "perfektes" Timing).
             // Wer schon während des Trefferstopps hämmert, bekommt kein PERFEKT.
             if ((pressed & ComboKeys) != 0 && P.state == St.Attack && P.atkHit && P.pressMark < 0)
@@ -375,7 +381,7 @@ namespace Sensensturm
                         SetState(P, St.Air);
                         break;
                     }
-                    if (P.bufLight > 0 || P.bufHeavy > 0 || P.bufDodge > 0 || P.bufShield > 0 || P.bufGrab > 0)
+                    if (P.bufLight > 0 || P.bufHeavy > 0 || P.bufDodge > 0 || P.bufShield > 0 || P.bufGrab > 0 || P.bufUlt > 0)
                     {
                         SetState(P, St.Air);
                         TryAir(s, P, -P.wallDir, up, down, held, false);
@@ -501,6 +507,20 @@ namespace Sensensturm
             if (P.onGround) P.runPhase += Math.Abs(P.vx) * 0.042f;
             Physics(P, (held & Btn.Down) != 0);
             P.prevHeld = held;
+            DecayBuffers(P);
+        }
+
+        // Gepufferte Tasten verfallen nach Tuning.InputBufferFrames. Sonst würde z. B. ein Druck aus dem Hitstun
+        // Sekunden später noch einen Angriff auslösen. Im Trefferstopp läuft der Puffer nicht ab (früher Return oben).
+        static void DecayBuffers(PlayerState P)
+        {
+            if (P.bufJump > 0) P.bufJump--;
+            if (P.bufLight > 0) P.bufLight--;
+            if (P.bufHeavy > 0) P.bufHeavy--;
+            if (P.bufDodge > 0) P.bufDodge--;
+            if (P.bufShield > 0) P.bufShield--;
+            if (P.bufGrab > 0) P.bufGrab--;
+            if (P.bufUlt > 0) P.bufUlt--;
         }
 
         static void GroundMove(PlayerState P, int dx)
@@ -594,10 +614,29 @@ namespace Sensensturm
             return true;
         }
 
+        // Ultimate: nur mit voller Leiste. Friert den Gegner kurz ein (Zeitstopp), der Angreifer ist bis zum Treffer unverwundbar.
+        static bool TryUlt(GameState s, PlayerState P, int dx)
+        {
+            P.bufUlt = 0;
+            if (P.ult < Tuning.UltMax) return false;
+            if (dx != 0) P.facing = dx;
+            AttackDef d = Attacks.SetOf(P.charId)[Attacks.Ult];
+            StartAttack(P, Attacks.Ult);
+            P.ult = 0;
+            P.invuln = Math.Max(P.invuln, d.Startup + d.Active);
+            P.fastFall = false;
+            if (!P.onGround) P.vy = 0;
+            PlayerState V = s.p[1 - P.slot];
+            if (V.state != St.KO && V.state != St.Respawn) V.hitlag = Math.Max(V.hitlag, Tuning.UltFreeze);
+            Emit(Ev.Ult, P.slot, P.x, P.y - 60, C(P).Weapon);
+            return true;
+        }
+
         // Aktionen am Boden. onlyBuffered: nur gepufferte Tasten zählen (für Cancels)
         static bool TryGround(GameState s, PlayerState P, int dx, bool up, bool down, int held, bool onlyBuffered)
         {
             bool comboCancel = onlyBuffered && P.state == St.Attack && P.atkHit;
+            if (P.bufUlt > 0 && TryUlt(s, P, dx)) return true;
             if (P.bufShield > 0 && CanShield(P)) { EnterShield(P, true); return true; }
             if (comboCancel && P.bufDodge > 0) return ChaseDodge(s, P, dx, up, down);
             if (P.bufDodge > 0 && P.dodgeCd <= 0)
@@ -631,7 +670,7 @@ namespace Sensensturm
             if (P.bufHeavy > 0)
             {
                 P.bufHeavy = 0;
-                int a = down ? Attacks.DHeavy : (dx != 0 ? Attacks.SHeavy : Attacks.NHeavy);
+                int a = down ? Attacks.DHeavy : up ? Attacks.UHeavy : (dx != 0 ? Attacks.SHeavy : Attacks.NHeavy);
                 if (dx != 0) P.facing = dx;
                 if (onlyBuffered && P.state == St.Attack && P.atk == a) return false;
                 StartAttack(P, a);
@@ -640,7 +679,9 @@ namespace Sensensturm
             if (P.bufLight > 0)
             {
                 P.bufLight = 0;
-                int a = up ? Attacks.ULight : down ? Attacks.DLight : dx != 0 ? Attacks.SLight : Attacks.NLight;
+                // aus dem Dash bzw. Sprint heraus wird der Seitwärtsangriff zum Angriff aus dem Lauf
+                bool running = (P.state == St.Dash || (P.state == St.Run && P.sprint)) && dx == P.facing;
+                int a = up ? Attacks.ULight : down ? Attacks.DLight : dx != 0 ? (running ? Attacks.DashAtk : Attacks.SLight) : Attacks.NLight;
                 if (dx != 0) P.facing = dx;
                 if (onlyBuffered && P.state == St.Attack && P.atk == a) return false;
                 StartAttack(P, a);
@@ -661,6 +702,7 @@ namespace Sensensturm
         static bool TryAir(GameState s, PlayerState P, int dx, bool up, bool down, int held, bool onlyBuffered)
         {
             bool comboCancel = onlyBuffered && P.state == St.Attack && P.atkHit;
+            if (P.bufUlt > 0 && TryUlt(s, P, dx)) return true;
             if (P.bufShield > 0 && CanShield(P)) { EnterShield(P, true); return true; }
             if (comboCancel && P.bufDodge > 0) return ChaseDodge(s, P, dx, up, down);
             if (P.bufDodge > 0 && P.dodgeCd <= 0 && !P.airDodgeUsed)
@@ -766,6 +808,7 @@ namespace Sensensturm
                 if (P.atkFrame == d.Startup && P.atk != Attacks.Throw && d.ProjKind < 0) Emit(Ev.Swing, P.slot, P.x, P.y - 50, d.Heavy ? 1 : 0);
                 if (P.atkFrame == d.Startup && d.ProjKind >= 0) Shoot(P, d);
                 if (P.atk == Attacks.DHeavy && P.atkFrame == d.Startup) Emit(Ev.Shockwave, P.slot, P.x, P.y, 1);
+                if (P.atk == Attacks.Ult && P.atkFrame == d.Startup) Emit(Ev.UltStrike, P.slot, P.x, P.y, C(P).Weapon);
             }
 
             // Bewegung während des Angriffs
@@ -791,10 +834,15 @@ namespace Sensensturm
                 case Attacks.Grab:
                     if (!P.onGround && f < ae) P.vy = Math.Min(P.vy, 2f);
                     break;
+                case Attacks.Ult:
+                    // schwebt in der Luft, bis der Angriff durch ist
+                    if (!P.onGround && f < ae) { P.vy = 0; P.fastFall = false; }
+                    if (f < st) P.vx *= 0.8f;
+                    break;
             }
 
             if (d.Lunge != 0 && f < st + 2 && P.onGround) P.vx = P.facing * d.Lunge;
-            if (d.ActiveDash != 0 && f >= st && f < ae && (d.Air || P.onGround)) P.vx = P.facing * d.ActiveDash;
+            if (d.ActiveDash != 0 && f >= st && f < ae && (d.Air || P.onGround || P.atk == Attacks.Ult)) P.vx = P.facing * d.ActiveDash;
 
             // Combo-Cancel nur nach einem echten Treffer
             if (P.atkHit)
@@ -804,7 +852,7 @@ namespace Sensensturm
                 {
                     bool perfect = P.pressMark >= 1 && P.pressMark <= Tuning.ComboCancelDelay + Tuning.PerfectWindow;
                     PlayerState V = s.p[1 - P.slot];
-                    bool anyBuf = P.bufLight > 0 || P.bufHeavy > 0 || P.bufJump > 0 || P.bufDodge > 0 || P.bufGrab > 0;
+                    bool anyBuf = P.bufLight > 0 || P.bufHeavy > 0 || P.bufJump > 0 || P.bufDodge > 0 || P.bufGrab > 0 || P.bufUlt > 0;
                     bool boost = perfect && anyBuf && V.state == St.Hitstun;
                     if (boost)
                     {
@@ -1045,7 +1093,8 @@ namespace Sensensturm
             }
 
             // Klingen treffen aufeinander -> Clank (Greifen ausgenommen)
-            if (act[0] && act[1] && !def[0].Grab && !def[1].Grab && hb[0].Hits(hb[1]))
+            bool ult = s.p[0].atk == Attacks.Ult || s.p[1].atk == Attacks.Ult; // die Ultimate lässt sich nicht abprallen
+            if (act[0] && act[1] && !def[0].Grab && !def[1].Grab && !ult && hb[0].Hits(hb[1]))
             {
                 for (int i = 0; i < 2; i++)
                 {
@@ -1166,10 +1215,21 @@ namespace Sensensturm
             ApplyHit(A, B, Bsnap.state == St.Hitstun, dmg, d.KbBase, d.KbGrowth, kx, ky, 1f + 0.35f * chargeT, d.Heavy, cx, cy);
         }
 
+        // Ultimate-Leiste füllen; die Ultimate selbst lädt nichts auf
+        static void GainUlt(PlayerState P, float amount)
+        {
+            if (P.state == St.Attack && P.atk == Attacks.Ult) return;
+            bool wasFull = P.ult >= Tuning.UltMax;
+            P.ult = Math.Min(Tuning.UltMax, P.ult + amount);
+            if (!wasFull && P.ult >= Tuning.UltMax) Emit(Ev.UltReady, P.slot, P.x, P.y - 140, 0);
+        }
+
         // Schaden + Knockback + Hitstun auf B anwenden (Angriffe und Würfe)
         static void ApplyHit(PlayerState A, PlayerState B, bool comboHit, float dmg, float kbBase, float kbGrowth, float kx, float ky, float kbMult, bool heavy, float cx, float cy, bool ranged = false)
         {
             B.damage = Math.Min(999f, B.damage + dmg);
+            GainUlt(A, dmg * Tuning.UltGainDeal);
+            GainUlt(B, dmg * Tuning.UltGainTake);
             // Super-Rüstung: Schaden ja, aber keine Unterbrechung
             if (B.state == St.Attack && B.atk >= 0 && B.atkFrame < Attacks.Of(B).Startup && Attacks.Of(B).Armor)
             {
@@ -1280,7 +1340,7 @@ namespace Sensensturm
             }
             else
             {
-                P.projVy += 0.1f;
+                if (P.projKind != 3) P.projVy += 0.1f; // der Ultimate-Pfeil fliegt gerade
                 P.projX += P.projVx;
                 P.projY += P.projVy;
                 Box M = Arena.Main;
@@ -1296,6 +1356,7 @@ namespace Sensensturm
         public static Box ProjBox(PlayerState P)
         {
             if (P.projKind == 2) return new Box(P.projX - 30, P.projY - 48, P.projX + 30, P.projY);
+            if (P.projKind == 3) return new Box(P.projX - 55, P.projY - 30, P.projX + 55, P.projY + 30);
             return new Box(P.projX - 20, P.projY - 9, P.projX + 20, P.projY + 9);
         }
 
@@ -1320,6 +1381,7 @@ namespace Sensensturm
                         Emit(Ev.Parry, B.slot, cx, cy, A.projDmg);
                         continue;
                     }
+                    if (B.facing == -A.projDir && A.projKind == 3) { BreakShield(B); continue; } // Ultimate-Pfeil zerbricht jeden Schild
                     if (B.facing == -A.projDir)
                     {
                         B.shieldHp -= A.projDmg * Tuning.ShieldDamageMult;
@@ -1333,7 +1395,7 @@ namespace Sensensturm
                 float kx = (float)Math.Cos(rad) * A.projDir, ky = (float)Math.Sin(rad);
                 // trifft der Pfeil, darf der Schütze aus seinem Angriff weiter-comboen
                 if (A.state == St.Attack) { A.atkHit = true; A.sinceHit = 0; A.pressMark = -1; }
-                ApplyHit(A, B, B.state == St.Hitstun, A.projDmg, A.projKbB, A.projKbG, kx, ky, 1f, false, cx, cy, true);
+                ApplyHit(A, B, B.state == St.Hitstun, A.projDmg, A.projKbB, A.projKbG, kx, ky, 1f, A.projKind == 3, cx, cy, true);
             }
         }
 

@@ -8,7 +8,7 @@
 | **Brokk, der Steinwächter** (Golem) | **Hammer** | langsam und schwer, extrem harte Treffer, **Super-Rüstung** beim Ausholen schwerer Angriffe (wird nicht unterbrochen), **Bebenwelle** rollt über den Boden |
 | **Lyra, die Sternenschützin** (Jägerin) | **Bogen** | schnell und leicht, Tritt-Combos, **aufladbare Sternenpfeile** (vorwärts, schräg nach oben, aus der Luft mit Rückstoß), **Rankenseil** greift aus großer Entfernung |
 
-Jeder Typ hat ein eigenes Moveset (14 Angriffe + Griff/Wurf) und eigene Werte für Tempo, Sprungkraft, Fallgeschwindigkeit und Gewicht. Die Auswahl erfolgt unter „Lokal spielen“ bzw. in der LAN-Lobby (beide Spieler wählen selbst). Combos für jeden Typ stehen unter *Einstellungen > Combos lernen* (Links/Rechts wechselt die Waffe).
+Jeder Typ hat ein eigenes Moveset (16 Angriffe + Griff/Wurf + Ultimate) und eigene Werte für Tempo, Sprungkraft, Fallgeschwindigkeit und Gewicht. Die Auswahl erfolgt unter „Lokal spielen“ bzw. in der LAN-Lobby (beide Spieler wählen selbst). Combos für jeden Typ stehen unter *Einstellungen > Combos lernen* (Links/Rechts wechselt die Waffe) und im Kampf jederzeit mit **F1** (Controller: *Back*) oder über *Pause > Combos ansehen*.
 Alle Grafiken werden im Code gezeichnet, alle Sounds werden synthetisiert. Es gibt keine fremden Assets.
 
 ## Arenen
@@ -26,6 +26,24 @@ Unter „Lokal spielen“ bzw. in der Host-Lobby wählt man unter **Arena** eine
 Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensensturm.exe`).
 
 Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
+
+**Spiegelduelle:** Wählen beide Spieler denselben Kämpfer (lokal und im Turnier), bekommt Spieler 2 automatisch eine Farbvariante: *Glut* (Lila Skelett), *Gift* (Blaues Skelett), *Frost* (Brokk) und *Mondjägerin* (Lyra).
+
+**CPU-Gegner:** Leicht, mittel und schwer unterscheiden sich in Reaktion, Tempo und Combos. Hat der Gegner viel Schaden, spielt die CPU gezielt auf K.O.: Sie setzt starke Angriffe ein, bewacht die Kante und schlägt Gegner beim Zurückkommen wieder hinaus. Sich selbst rettet sie mit Sprüngen, Wandsprüngen, Aufschwung und Luft-Dodge.
+
+## Wiederholungen
+Lokale und selbst gehostete Matches werden automatisch aufgezeichnet. Im Ergebnisbildschirm gibt es **Wiederholung ansehen** und **Speichern** (Ordner `replays` neben der .exe). Gespeicherte Wiederholungen findest du im Hauptmenü unter **Wiederholungen**. In der Wiedergabe gilt: Enter = Pause, Links/Rechts = Tempo (1×/2×/4×), Esc = Ende. Im Turnier lassen sich das letzte Match und das Finale noch einmal ansehen, auch ausgerechnete CPU-Matches.
+Eine Wiederholung speichert nur die Eingaben (meist wenige KB) und spielt das Match exakt nach. Dateien aus einer anderen Spielversion werden deshalb abgelehnt. Als Online-Client gibt es keine Aufnahme, weil dort die Eingaben des Hosts fehlen.
+
+## Turnier (bis zu 16 Spieler)
+Im Hauptmenü **Turnier** wählen:
+1. **Teilnehmer** (2–16), **Leben**, **Zeitlimit** und **Arena** (fest oder zufällig je Match) einstellen.
+2. Für jeden Teilnehmer per Enter/Klick zwischen **Mensch** und **CPU** (leicht/mittel/schwer) wechseln, mit Links/Rechts den Kämpfer wählen.
+3. **Turnier starten!** Die Paarungen werden ausgelost. Bei Teilnehmerzahlen ohne Zweierpotenz ziehen einige Teilnehmer per **Freilos** direkt in die zweite Runde ein.
+
+Gespielt wird im K.-o.-System, alle Menschen nacheinander am selben PC: Gegen die CPU gelten die Tasten von Spieler 1, bei Mensch gegen Mensch die Belegungen von Spieler 1 und 2. Kämpfe **CPU gegen CPU** werden wahlweise automatisch ausgerechnet oder angeschaut. Endet ein Match nach Zeitablauf unentschieden, entscheiden Leben, dann Schaden, dann das Los.
+
+Der **Turnierbaum** ist animiert. Die Teilnehmer fliegen nacheinander ein, die Linie des Siegers läuft leuchtend in die nächste Runde, wo sein Name aufploppt, und Verlierer werden ausgegraut und durchgestrichen. Das nächste Match pulsiert mit einer VS-Marke. Am Ende gibt es eine Siegerehrung mit Pokal und Konfetti. Ein laufendes Turnier lässt sich verlassen und im Hauptmenü mit **Turnier fortsetzen** wieder aufnehmen, solange das Spiel offen bleibt.
 
 ## Online-Spiel (über das Internet, verschiedene Netzwerke)
 1. Host: **Online-Spiel erstellen**. Es erscheint ein 6-stelliger **Raum-Code** (mit „Raum-Code kopieren“ in die Zwischenablage).
@@ -54,8 +72,9 @@ Technik: Der Host rechnet das Spiel autoritativ und entscheidet allein über Tre
 | Dodge (Boden + Richtung = Dash) | L oder Shift | Num 3 | RT / RB |
 | Schild / Parieren | H oder **rechte Maustaste** | Num 5 | LT / LB |
 | Greifen / Werfen (Sensenhaken) | E | Num 4 | Y |
+| **Ultimate** (Leiste voll) | Q | Num 6 | rechten Stick drücken |
 
-Esc/Start = Pause · F11 = Vollbild · F3 = Hitboxen anzeigen
+Esc/Start = Pause · F1/Back = Combos ansehen · F11 = Vollbild · F3 = Hitboxen anzeigen
 
 ## Spielmechanik
 - **Bewegung:** sofortige Beschleunigung, variable Sprunghöhe, 3 Luftsprünge, Coyote-Time, Schnellfallen (Unten in der Luft), Dash und Sprint, Luft-Dodge in 8 Richtungen (einmal pro Luftphase, mit Abklingzeit), Wandrutschen und Wandsprung an den Seiten der Hauptplattform, Schwebeplattformen (Unten + Springen zum Durchfallen).
@@ -65,6 +84,8 @@ Esc/Start = Pause · F11 = Vollbild · F3 = Hitboxen anzeigen
 - **PERFEKT-Timing:** Drückst du die nächste Taste kurz *nach* dem Trefferstopp (nicht schon vorher), erscheint PERFEKT. Der Gegner bleibt länger betäubt, ein perfekter Sprung kostet keinen Luftsprung und zielt automatisch auf den Gegner. Perfekte Ketten reißen deshalb nicht ab (z. B. die Himmelsleiter bis zum K.O.).
 - **Verfolgungs-Dodge:** Dodge direkt nach einem Treffer jagt dem Gegner hinterher.
 - **Sensenhaken:** Greifen geht durch Schild und Parade. Danach wirfst du per Richtung nach vorne, hinten, oben oder unten. Ein Wurf nach unten eignet sich als Combo-Starter.
+- **Neue Angriffe:** *Leicht aus dem Dash/Sprint* ist ein Angriff aus dem Lauf (Schnitterlauf, Rammbock mit Super-Rüstung, Kometentritt). *Oben + Schwer am Boden* ist ein aufladbarer Hochschlag gegen Gegner über dir (Mondaufgang, Vulkanhieb mit Super-Rüstung, Sternensalto).
+- **Ultimate:** Die Leiste über dem Spieler-Panel füllt sich durch verteilten und eingesteckten Schaden. Ist sie voll, löst die Ultimate-Taste einen **Zeitstopp** aus (der Gegner friert kurz ein, du bist bis zum Treffer unverwundbar) und danach die Ultimate der Waffe: *Seelensturm* (Sturmschnitt nach vorne), *Weltenbrecher* (Hammerschlag zu beiden Seiten) oder *Sternenflut* (riesiger Pfeil quer über die Bühne). Jede Ultimate zerbricht einen Schild, eine perfekte Parade wehrt sie aber ab. Die Ultimate geht auch als Combo-Abschluss nach jedem Treffer. Werte (Leistengröße, Aufladung, Zeitstopp) stehen in `tuning.ini`.
 - **Rettung:** Getroffen werden gibt alle Sprünge, den Luft-Dodge und den Aufschwung zurück. Es gibt 3 Luftsprünge, Wandsprünge an den tiefen Seitenwänden und eine Kantenhilfe, die dich knapp unter der Kante auf die Bühne zieht.
 - **Schild:** Die ersten 8 Frames nach dem Drücken sind eine **perfekte Parade**. Sie wehrt alles ab und betäubt den Angreifer, dazu gibt es Lichtblitz, Glockenklang und „PARIERT!“. Danach blockt der Schild nur nach vorne, verliert Energie und kann von schweren Angriffen gebrochen werden. Wer den Schild zu früh loslässt, bekommt eine Abklingzeit.
 - **Knockback** steigt mit dem Schaden (Farbe der Prozentanzeige: weiß → gelb → orange → rot). KO gibt es beim Verlassen der Arena. Standard sind 3 Leben.

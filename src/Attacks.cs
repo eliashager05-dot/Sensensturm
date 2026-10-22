@@ -55,9 +55,10 @@ namespace Sensensturm
     public static class Attacks
     {
         public const int NLight = 0, SLight = 1, ULight = 2, DLight = 3, NAir = 4, SAir = 5, UAir = 6, DAir = 7,
-            SHeavy = 8, NHeavy = 9, DHeavy = 10, SAirHeavy = 11, DAirHeavy = 12, UAirHeavy = 13, Impact = 14, Grab = 15, Throw = 16;
+            SHeavy = 8, NHeavy = 9, DHeavy = 10, SAirHeavy = 11, DAirHeavy = 12, UAirHeavy = 13, Impact = 14, Grab = 15, Throw = 16,
+            UHeavy = 17, DashAtk = 18, Ult = 19;
 
-        public const int Count = 17;
+        public const int Count = 20;
         public static readonly AttackDef[][] Sets = new AttackDef[3][];
         static AttackDef[] cur;
         public static AttackDef[] All { get { return Sets[0]; } }
@@ -195,6 +196,28 @@ namespace Sensensturm
             d.Wind = G(22, 10, 10, -40, -70, 150, 170, -130);
             d.Strike = d.Wind.Copy();
             d.Follow = G(20, 10, 5, 40, 60, 140, 160, 60);
+
+            // ---------------- Neue Angriffe ----------------
+            // Oben + Schwer am Boden: aufladbarer Hochschlag gegen Gegner über einem
+            d = Mk(UHeavy, "Mondaufgang", 14, 6, 26, -70, -235, 175, 175, 13f, 8.5f, 0.095f, -86, H);
+            d.ChargeFrame = 8; d.ChargeMax = 40; d.ChargeScale = 0.8f;
+            d.Wind = G(16, 18, 12, 75, 115, 120, 140, 145);
+            d.Strike = G(-8, 0, -20, -78, -92, 110, 60, -78);
+            d.Follow = G(-18, 0, -25, -118, -132, 115, 70, -165);
+
+            // Leicht aus dem Dash bzw. Sprint: Angriff aus dem Lauf
+            d = Mk(DashAtk, "Schnitterlauf", 6, 8, 20, 10, -102, 150, 96, 10f, 6.5f, 0.07f, -35, 0);
+            d.ActiveDash = 14f;
+            d.Wind = new Pose(-10, 8, 0, -150, -120, 40, 20, 40, 100, 140, 110, -120);
+            d.Strike = new Pose(36, 16, 10, 0, 0, 140, 160, 20, 82, 150, 120, 12);
+            d.Follow = new Pose(32, 14, 10, 35, 50, 145, 165, 25, 84, 145, 115, 95);
+
+            // ULTIMATE: Zeitstopp, dann ein gewaltiger Sturmschnitt nach vorne
+            d = Mk(Ult, "Seelensturm", 30, 10, 34, -60, -200, 330, 210, 32f, 11f, 0.15f, -42, H);
+            d.ActiveDash = 16f;
+            d.Wind = G(0, 16, -12, -100, -92, -80, -95, -95);
+            d.Strike = new Pose(30, 12, 8, 10, 20, 150, 170, 35, 86, 140, 112, 30);
+            d.Follow = new Pose(30, 12, 8, 10, 20, 150, 170, 35, 86, 140, 112, 122, 360);
         }
 
         static void CopyPoses(AttackDef d, int fromId)
@@ -229,6 +252,14 @@ namespace Sensensturm
             d = Mk(Impact, "Bergsturz-Aufprall", 1, 5, 20, -155, -58, 310, 62, 12f, 7f, 0.09f, -50, H | AW); CopyPoses(d, Impact);
             d = Mk(Grab, "Steingriff", 7, 5, 26, 8, -102, 104, 96, 0f, 0f, 0f, 0, GR); CopyPoses(d, Grab);
             d = Mk(Throw, "Wurf", 1, 1, 22, 0, 0, 0, 0, 0f, 0f, 0f, 0, 0); CopyPoses(d, Throw);
+            // Neue Angriffe
+            d = Mk(UHeavy, "Vulkanhieb", 20, 7, 32, -60, -250, 180, 200, 17f, 9f, 0.11f, -84, H); CopyPoses(d, UHeavy);
+            d.ChargeFrame = 12; d.ChargeMax = 40; d.ChargeScale = 0.6f; d.Armor = true;
+            d = Mk(DashAtk, "Rammbock", 9, 10, 24, 5, -108, 120, 104, 12f, 7f, 0.08f, -32, 0); CopyPoses(d, DashAtk);
+            d.ActiveDash = 12f; d.Armor = true;
+            // ULTIMATE: Zeitstopp, dann zerreißt ein Hammerschlag die Bühne zu beiden Seiten
+            d = Mk(Ult, "Weltenbrecher", 34, 8, 40, -330, -150, 660, 160, 34f, 12f, 0.15f, -70, H | AW); CopyPoses(d, DHeavy);
+            d.Armor = true;
         }
 
         // ================= BOGEN (Lyra): schnell, Tritte, aufladbare Pfeile =================
@@ -295,6 +326,20 @@ namespace Sensensturm
             d = Mk(Grab, "Rankenseil", 9, 6, 28, 18, -96, 195, 66, 0f, 0f, 0f, 0, GR);
             d.Wind = G(-10, 4, 0, 170, 170, 120, 140, 40); d.Strike = G(12, 6, 5, -5, -5, 150, 170, 0); d.Follow = G(5, 6, 0, 30, 40, 140, 160, 20);
             d = Mk(Throw, "Wurf", 1, 1, 18, 0, 0, 0, 0, 0f, 0f, 0f, 0, 0); CopyPoses(d, Throw);
+            // Neue Angriffe
+            d = Mk(UHeavy, "Sternensalto", 9, 6, 22, -40, -205, 130, 150, 10f, 9f, 0.08f, -88, H); d.FootTrail = true;
+            d.ChargeFrame = 6; d.ChargeMax = 30; d.ChargeScale = 0.6f;
+            d.Wind = G(15, 14, 10, 60, 40, 120, 100, 30);
+            d.Strike = K(-30, 0, -20, 120, 150, 140, 170, -95, -100, 110, 100, 40);
+            d.Follow = K(-35, 0, -25, 130, 160, 150, 170, -130, -150, 100, 100, 40, -360);
+            d = Mk(DashAtk, "Kometentritt", 5, 9, 18, 8, -95, 110, 70, 8f, 6f, 0.06f, -30, 0); d.ActiveDash = 15f; d.FootTrail = true;
+            d.Wind = K(-12, 6, -5, 70, 30, 140, 110, 25, 115, 105, 95, 30);
+            d.Strike = K(-26, 2, -10, 80, 40, 160, 140, -10, -6, 100, 92, 40);
+            d.Follow = K(-18, 4, -5, 75, 35, 150, 120, 20, 40, 100, 92, 35);
+            // ULTIMATE: Zeitstopp, dann ein riesiger Sternenpfeil, der Schilde zerbricht
+            d = Mk(Ult, "Sternenflut", 28, 2, 30, 0, 0, 0, 0, 0f, 0f, 0f, 0, H);
+            d.ProjKind = 3; d.ProjSpeed = 24f; d.ProjLife = 70; d.ProjDmg = 30f; d.ProjKbB = 11f; d.ProjKbG = 0.14f; d.ProjKbAng = -30; d.Recoil = 7f;
+            d.Wind = G(-8, 10, 0, 0, 0, 175, 10, 0); d.Strike = G(-14, 10, 0, 0, 0, 160, 40, 0); d.Follow = G(-10, 8, 0, 10, 10, 150, 40, 5);
         }
     }
 
