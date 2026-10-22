@@ -1,0 +1,679 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Threading;
+
+namespace Sensensturm
+{
+    // Automatisierte Tests: Kampfsystem, Parade, Netzwerk-Loopback und Screenshots.
+    static class Tests
+    {
+        static string outDir;
+
+        static void Main(string[] args)
+        {
+            outDir = args.Length > 0 ? args[0] : ".";
+            Settings.Load();
+            int fails = 0;
+            fails += TestMovement();
+            fails += TestAttacks();
+            fails += TestParry();
+            fails += TestBlock();
+            fails += TestKO();
+            fails += TestNetwork();
+            fails += TestCombos();
+            fails += TestRecovery();
+            Screenshots();
+            Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
+        }
+
+        static void Check(bool ok, string name, ref int fails)
+        {
+            Console.WriteLine((ok ? "  OK   " : "  FAIL ") + name);
+            if (!ok) fails++;
+        }
+
+        static GameState Fresh()
+        {
+            var s = GameState.NewMatch(0, 1, 3, 0);
+            s.phase = GameState.Fight;
+            s.phaseTimer = 0;
+            return s;
+        }
+
+        static void Run(GameState s, int n, int h0, int h1, List<GameEvent> ev)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                int p0 = h0 & ~s.p[0].prevHeld, p1 = h1 & ~s.p[1].prevHeld;
+                Sim.Step(s, new[] { h0, h1 }, new[] { p0, p1 }, ev, false);
+            }
+        }
+
+        static int TestMovement()
+        {
+            Console.WriteLine("Bewegung:");
+            int f = 0;
+            var s = Fresh();
+            var ev = new List<GameEvent>();
+            Run(s, 4, Btn.Right, 0, ev);
+            Check(s.p[0].vx >= Tuning.RunSpeed - 0.01f, "Laufen erreicht volle Geschwindigkeit in 4 Frames (vx=" + s.p[0].vx + ")", ref f);
+            Run(s, 6, 0, 0, ev);
+            Check(Math.Abs(s.p[0].vx) < 0.01f, "Abbremsen ohne Eingabe", ref f);
+            // voller Sprung
+            s = Fresh();
+            float minY = 0;
+            Run(s, 1, Btn.Jump, 0, ev);
+            for (int i = 0; i < 60; i++) { Run(s, 1, Btn.Jump, 0, ev); minY = Math.Min(minY, s.p[0].y); }
+            var s2 = Fresh();
+            float minY2 = 0;
+            Run(s2, 1, Btn.Jump, 0, ev);
+            for (int i = 0; i < 60; i++) { Run(s2, 1, 0, 0, ev); minY2 = Math.Min(minY2, s2.p[0].y); }
+            Check(minY < minY2 - 40, "Variable Sprunghöhe (gehalten " + (int)minY + " vs. kurz " + (int)minY2 + ")", ref f);
+            // Luftsprünge
+            s = Fresh();
+            Run(s, 1, Btn.Jump, 0, ev); Run(s, 12, 0, 0, ev);
+            Run(s, 1, Btn.Jump, 0, ev); Run(s, 12, 0, 0, ev);
+            Run(s, 1, Btn.Jump, 0, ev); Run(s, 12, 0, 0, ev);
+            Run(s, 1, Btn.Jump, 0, ev); Run(s, 2, 0, 0, ev);
+            Check(s.p[0].airJumps == 0, "Doppel-/Dreifachsprung verbraucht Luftsprünge", ref f);
+            Run(s, 120, 0, 0, ev);
+            Check(s.p[0].onGround && s.p[0].airJumps == Tuning.AirJumps, "Landung setzt Sprünge zurück", ref f);
+            // Dash
+            s = Fresh();
+            Run(s, 1, Btn.Right | Btn.Dodge, 0, ev);
+            Check(s.p[0].state == St.Dash && s.p[0].vx > 12, "Dash am Boden", ref f);
+            Run(s, 12, Btn.Right, 0, ev);
+            Check(s.p[0].sprint && s.p[0].vx > Tuning.RunSpeed, "Sprint nach Dash", ref f);
+            // Fast Fall
+            s = Fresh();
+            Run(s, 1, Btn.Jump, 0, ev); Run(s, 24, Btn.Jump, 0, ev);
+            Run(s, 2, Btn.Down | Btn.Jump, 0, ev);
+            Check(s.p[0].vy >= Tuning.FastFallSpeed - 0.01f, "Schnellfallen", ref f);
+            // Luft-Dodge
+            s = Fresh();
+            Run(s, 1, Btn.Jump, 0, ev); Run(s, 5, 0, 0, ev);
+            Run(s, 1, Btn.Dodge | Btn.Right, 0, ev);
+            Check(s.p[0].state == St.AirDodge && s.p[0].invuln > 0, "Luft-Dodge mit Unverwundbarkeit", ref f);
+            Run(s, 30, 0, 0, ev);
+            Run(s, 1, Btn.Dodge, 0, ev);
+            Check(s.p[0].state != St.AirDodge, "Zweiter Luft-Dodge gesperrt bis zur Landung", ref f);
+            // Wandsprung
+            s = Fresh();
+            s.p[0].x = Arena.Main.L - Arena.HalfW - 30; s.p[0].y = 80; s.p[0].onGround = false; s.p[0].state = St.Air;
+            Run(s, 10, Btn.Right, 0, ev);
+            Check(s.p[0].state == St.Wall, "Wandkontakt / Festhalten", ref f);
+            Run(s, 1, Btn.Right | Btn.Jump, 0, ev);
+            Check(s.p[0].vy < -10 && s.p[0].vx < 0, "Wandsprung", ref f);
+            // Soft-Plattform durchfallen
+            s = Fresh();
+            s.p[0].x = -350; s.p[0].y = -185; s.p[0].onGround = true; s.p[0].plat = 1;
+            Run(s, 3, 0, 0, ev);
+            Check(s.p[0].onGround && s.p[0].plat == 1, "Stehen auf Schwebeplattform", ref f);
+            Run(s, 1, Btn.Down | Btn.Jump, 0, ev); Run(s, 10, 0, 0, ev);
+            Check(s.p[0].y > -175, "Durch Schwebeplattform fallen (Unten + Springen)", ref f);
+            return f;
+        }
+
+        static int TestAttacks()
+        {
+            int f = 0;
+            foreach (int ch in new[] { 0, 2, 3 }) f += TestAttacksFor(ch);
+            return f;
+        }
+
+        static int TestAttacksFor(int ch)
+        {
+            Console.WriteLine("Angriffe " + CharDef.All[ch].Name + " (" + CharDef.All[ch].TypeName + "):");
+            int f = 0;
+            bool bow = CharDef.All[ch].Weapon == Weapon.Bow;
+            var combos = new[]
+            {
+                new { Name = "N-Light", G = true, H = Btn.Light, Dy = 0f, Dx = 70f },
+                new { Name = "S-Light", G = true, H = Btn.Light | Btn.Right, Dy = 0f, Dx = 110f },
+                new { Name = "U-Light", G = true, H = Btn.Light | Btn.Up, Dy = -100f, Dx = 20f },
+                new { Name = "D-Light", G = true, H = Btn.Light | Btn.Down, Dy = 0f, Dx = 90f },
+                new { Name = "S-Heavy", G = true, H = Btn.Heavy | Btn.Right, Dy = 0f, Dx = bow ? 260f : 150f },
+                new { Name = "N-Heavy", G = true, H = Btn.Heavy, Dy = bow ? -170f : 0f, Dx = bow ? 170f : -90f },
+                new { Name = "D-Heavy", G = true, H = Btn.Heavy | Btn.Down, Dy = 0f, Dx = 120f },
+                new { Name = "N-Air", G = false, H = Btn.Light, Dy = 0f, Dx = 60f },
+                new { Name = "S-Air", G = false, H = Btn.Light | Btn.Right, Dy = 0f, Dx = 100f },
+                new { Name = "U-Air", G = false, H = Btn.Light | Btn.Up, Dy = -110f, Dx = 0f },
+                new { Name = "D-Air", G = false, H = Btn.Light | Btn.Down, Dy = 70f, Dx = 20f },
+                new { Name = "S-Air-Heavy", G = false, H = Btn.Heavy | Btn.Right, Dy = bow ? 40f : 0f, Dx = bow ? 240f : 120f },
+                new { Name = "D-Air-Heavy", G = false, H = Btn.Heavy, Dy = 60f, Dx = 0f },
+                new { Name = "U-Air-Heavy", G = false, H = Btn.Heavy | Btn.Up, Dy = -90f, Dx = 40f },
+            };
+            foreach (var c in combos)
+            {
+                var s = Fresh();
+                s.p[0].charId = ch; s.p[1].charId = ch == 0 ? 1 : 0;
+                var A = s.p[0]; var B = s.p[1];
+                A.x = 0; A.facing = 1;
+                if (!c.G) { A.x = 900; A.y = -520; A.onGround = false; A.state = St.Air; A.plat = -1; }
+                B.x = A.x + c.Dx; B.y = A.y + c.Dy; B.onGround = false; B.state = St.Air; B.stateTime = 0;
+                bool bAir = !(B.y >= -0.1f && B.x > Arena.Main.L && B.x < Arena.Main.R);
+                if (!bAir) { B.y = 0; B.onGround = true; B.state = St.Idle; }
+                B.invuln = 0;
+                var ev = new List<GameEvent>();
+                int hitTick = -1, startup = -1;
+                for (int t = 0; t < 110; t++)
+                {
+                    int h = t < 2 ? c.H : 0;
+                    // Gegner bis zum Treffer relativ zum Angreifer festhalten
+                    if (hitTick < 0 && bAir) { B.x = A.x + c.Dx; B.y = A.y + c.Dy; B.vx = B.vy = 0; }
+                    Sim.Step(s, new[] { h, 0 }, new[] { t == 0 ? h : 0, 0 }, ev, false);
+                    if (A.state == St.Attack && startup < 0) startup = Attacks.Of(A).Startup;
+                    if (Environment.GetEnvironmentVariable("DBG") == ch + c.Name && t < 24) { Box hb; AttackDef dd; bool on = Sim.HitboxActive(A, out hb, out dd); Box hu = B.Hurt; Console.WriteLine("    t" + t + " A " + A.state + "/" + A.atk + " f" + A.atkFrame + " y" + (int)A.y + " hb " + (on ? (int)hb.L + ".." + (int)hb.R + " / " + (int)hb.T + ".." + (int)hb.B : "-") + " | B " + B.state + " hurt " + (int)hu.L + ".." + (int)hu.R + " / " + (int)hu.T + ".." + (int)hu.B); }
+                    foreach (var e in ev) if (e.Type == Ev.Hit && hitTick < 0) hitTick = t;
+                    ev.Clear();
+                }
+                bool ok = hitTick >= 0 && B.damage > 0;
+                Check(ok, c.Name + ": Treffer an Tick " + hitTick + " (Startup " + startup + "), Schaden " + B.damage.ToString("0.0") + ", Knockback-Richtung vx=" + B.vx.ToString("0.0") + " vy=" + B.vy.ToString("0.0"), ref f);
+            }
+            // Keine Mehrfachtreffer derselben Attacke
+            {
+                var s = Fresh();
+                s.p[1].x = s.p[0].x + 70;
+                var ev = new List<GameEvent>();
+                int hits = 0;
+                for (int t = 0; t < 30; t++)
+                {
+                    Sim.Step(s, new[] { t < 1 ? Btn.Light : 0, 0 }, new[] { t == 0 ? Btn.Light : 0, 0 }, ev, false);
+                    foreach (var e in ev) if (e.Type == Ev.Hit) hits++;
+                    ev.Clear();
+                }
+                Check(hits == 1, "Mehrfachtreffer-Schutz (Treffer: " + hits + ")", ref f);
+            }
+            // Combo: N-Light -> U-Light per Cancel nach Treffer
+            {
+                var s = Fresh();
+                s.p[1].x = s.p[0].x + 70;
+                var ev = new List<GameEvent>();
+                int hits = 0;
+                for (int t = 0; t < 60; t++)
+                {
+                    int h = t == 0 ? Btn.Light : (t >= 10 && t <= 12 ? Btn.Light | Btn.Up : 0);
+                    int p = (t == 0 || t == 10) ? Btn.Light : 0;
+                    Sim.Step(s, new[] { h, 0 }, new[] { p, 0 }, ev, false);
+                    foreach (var e in ev) if (e.Type == Ev.Hit) hits++;
+                    ev.Clear();
+                }
+                Check(hits == 2 && s.p[0].combo == 2, "Combo N-Light > U-Light (Treffer " + hits + ", Combo " + s.p[0].combo + ")", ref f);
+            }
+            // Whiff: kein Cancel ohne Treffer
+            {
+                var s = Fresh();
+                s.p[1].x = 600;
+                var ev = new List<GameEvent>();
+                int t0 = -1;
+                for (int t = 0; t < 40; t++)
+                {
+                    int p = (t == 0 || t == 10) ? Btn.Light : 0;
+                    Sim.Step(s, new[] { p, 0 }, new[] { p, 0 }, ev, false);
+                    if (t == 11) t0 = s.p[0].atk;
+                }
+                Check(t0 == Attacks.NLight, "Kein Cancel bei verfehltem Angriff", ref f);
+            }
+            // Aufladen erhöht Schaden
+            {
+                float d1 = ChargeDamage(0), d2 = ChargeDamage(60);
+                Check(d2 > d1 * 1.5f, "Aufgeladener Angriff: " + d1.ToString("0.0") + " -> " + d2.ToString("0.0") + " Schaden", ref f);
+            }
+            return f;
+        }
+
+        static float ChargeDamage(int hold)
+        {
+            var s = Fresh();
+            s.p[1].x = s.p[0].x + 100;
+            var ev = new List<GameEvent>();
+            for (int t = 0; t < 140; t++)
+                Sim.Step(s, new[] { t <= hold ? Btn.Heavy : 0, 0 }, new[] { t == 0 ? Btn.Heavy : 0, 0 }, ev, false);
+            return s.p[1].damage;
+        }
+
+        static int ParryAt(int shieldTick, out List<GameEvent> all, out GameState st)
+        {
+            var s = Fresh();
+            s.p[0].x = 0; s.p[1].x = 100; s.p[1].facing = -1; s.p[0].facing = 1;
+            all = new List<GameEvent>();
+            var ev = new List<GameEvent>();
+            // P1 macht S-Heavy (Startup 18) Richtung P0, P0 drückt Schild bei shieldTick
+            for (int t = 0; t < 70; t++)
+            {
+                int h1 = t < 2 ? Btn.Heavy | Btn.Left : 0;
+                int h0 = t >= shieldTick ? Btn.Shield : 0;
+                Sim.Step(s, new[] { h0, h1 }, new[] { t == shieldTick ? Btn.Shield : 0, t == 0 ? Btn.Heavy : 0 }, ev, false);
+                all.AddRange(ev);
+                ev.Clear();
+            }
+            st = s;
+            return 0;
+        }
+
+        static int TestParry()
+        {
+            Console.WriteLine("Parade:");
+            int f = 0;
+            List<GameEvent> ev; GameState s;
+            ParryAt(14, out ev, out s);
+            bool parried = ev.Exists(e => e.Type == Ev.Parry);
+            Check(parried && s.p[0].damage == 0, "Perfekt getimte Parade wehrt ab (Schaden " + s.p[0].damage + ")", ref f);
+            Check(s.p[0].statParries == 1, "Parade gezählt", ref f);
+            ParryAt(14, out ev, out s);
+            // Angreifer betäubt?
+            var s3 = Fresh();
+            s3.p[0].x = 0; s3.p[1].x = 100; s3.p[1].facing = -1;
+            var e3 = new List<GameEvent>();
+            bool stunned = false;
+            for (int t = 0; t < 40; t++)
+            {
+                Sim.Step(s3, new[] { t >= 14 ? Btn.Shield : 0, t < 2 ? Btn.Heavy | Btn.Left : 0 }, new[] { t == 14 ? Btn.Shield : 0, t == 0 ? Btn.Heavy : 0 }, e3, false);
+                if (s3.p[1].state == St.Parried) stunned = true;
+            }
+            Check(stunned, "Angreifer wird nach Parade betäubt", ref f);
+            ParryAt(2, out ev, out s);
+            bool p2 = ev.Exists(e => e.Type == Ev.Parry);
+            Check(!p2, "Zu frühes Schild = keine Parade (nur Block oder Treffer)", ref f);
+            return f;
+        }
+
+        static int TestBlock()
+        {
+            Console.WriteLine("Block / Schild:");
+            int f = 0;
+            var s = Fresh();
+            s.p[0].x = 0; s.p[1].x = 70; s.p[1].facing = -1;
+            var ev = new List<GameEvent>();
+            var all = new List<GameEvent>();
+            for (int t = 0; t < 40; t++)
+            {
+                Sim.Step(s, new[] { Btn.Shield, t == 15 ? Btn.Light : 0 }, new[] { t == 0 ? Btn.Shield : 0, t == 15 ? Btn.Light : 0 }, ev, false);
+                all.AddRange(ev); ev.Clear();
+            }
+            Check(all.Exists(e => e.Type == Ev.Block) && s.p[0].damage < 2, "Block reduziert Schaden (" + s.p[0].damage.ToString("0.0") + ")", ref f);
+            Check(s.p[0].shieldHp < Tuning.ShieldMax - 5, "Block belastet Schild (" + (int)s.p[0].shieldHp + ")", ref f);
+            // Schildbruch durch schwere Angriffe
+            s = Fresh();
+            s.p[0].x = 0; s.p[1].x = 120; s.p[1].facing = -1;
+            all.Clear();
+            for (int t = 0; t < 400; t++)
+            {
+                bool start = t % 60 == 0;
+                Sim.Step(s, new[] { Btn.Shield, start ? Btn.Heavy | Btn.Left : 0 }, new[] { t == 0 ? Btn.Shield : 0, start ? Btn.Heavy : 0 }, ev, false);
+                all.AddRange(ev); ev.Clear();
+                s.p[0].x = 0; s.p[1].x = 120;
+            }
+            Check(all.Exists(e => e.Type == Ev.ShieldBreak), "Schwere Angriffe brechen den Schild", ref f);
+            // Schild von hinten
+            s = Fresh();
+            s.p[0].x = 0; s.p[0].facing = -1; s.p[1].x = 70; s.p[1].facing = -1;
+            all.Clear();
+            for (int t = 0; t < 40; t++)
+            {
+                Sim.Step(s, new[] { Btn.Shield, t < 1 ? Btn.Light : 0 }, new[] { 0, t == 0 ? Btn.Light : 0 }, ev, false);
+                all.AddRange(ev); ev.Clear();
+                if (t == 0) s.p[0].facing = -1;
+            }
+            Check(all.Exists(e => e.Type == Ev.Hit), "Block schützt nicht von hinten", ref f);
+            return f;
+        }
+
+        static int TestKO()
+        {
+            Console.WriteLine("KO:");
+            int f = 0;
+            var s = Fresh();
+            s.p[1].damage = 160;
+            s.p[0].x = 300; s.p[1].x = 430;
+            var ev = new List<GameEvent>();
+            var all = new List<GameEvent>();
+            for (int t = 0; t < 400; t++)
+            {
+                Sim.Step(s, new[] { t < 50 ? Btn.Heavy | Btn.Right : 0, 0 }, new[] { t == 0 ? Btn.Heavy : 0, 0 }, ev, false);
+                all.AddRange(ev); ev.Clear();
+            }
+            Check(all.Exists(e => e.Type == Ev.KO) && s.p[1].stocks == 2, "Aufgeladener schwerer Hieb bei 160% schleudert aus der Arena (Leben " + s.p[1].stocks + ")", ref f);
+            Check(s.p[1].state != St.KO, "Respawn nach KO (Zustand " + s.p[1].state + ")", ref f);
+            return f;
+        }
+
+        static int TestNetwork()
+        {
+            Console.WriteLine("Netzwerk (Loopback):");
+            int f = 0;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Func<double> now = () => sw.Elapsed.TotalSeconds;
+            var host = new HostSession();
+            string err = host.Start(47123);
+            Check(err == null, "Host öffnet Port 47123 " + (err ?? ""), ref f);
+            var cl = new ClientSession();
+            Check(cl.Open() == null, "Client-Socket", ref f);
+            cl.Connect("127.0.0.1", 47123, now());
+            for (int i = 0; i < 100 && cl.Status != ClientSession.Connected; i++) { host.Poll(now()); cl.Poll(now()); Thread.Sleep(5); }
+            Check(cl.Status == ClientSession.Connected && host.HasClient, "Client tritt bei", ref f);
+
+            // zweiter Client wird abgewiesen
+            var c2 = new ClientSession(); c2.Open(); c2.Connect("127.0.0.1", 47123, now());
+            for (int i = 0; i < 60 && c2.Status == ClientSession.Connecting; i++) { host.Poll(now()); c2.Poll(now()); Thread.Sleep(5); }
+            Check(c2.Status == ClientSession.Failed && c2.Error.Contains("voll"), "Zweiter Spieler: \"" + c2.Error + "\"", ref f);
+            c2.Close();
+
+            // falscher Port -> Zeitüberschreitung
+            var c3 = new ClientSession(); c3.Open(); c3.Connect("127.0.0.1", 47199, now() - 5.9);
+            for (int i = 0; i < 40 && c3.Status == ClientSession.Connecting; i++) { c3.Poll(now()); Thread.Sleep(5); }
+            Check(c3.Status == ClientSession.Failed, "Fehlermeldung bei falscher Adresse: \"" + c3.Error.Substring(0, Math.Min(60, c3.Error.Length)) + "...\"", ref f);
+            c3.Close();
+            var c4 = new ClientSession(); c4.Open(); c4.Connect("192.168.abc", 47123, now());
+            Check(c4.Status == ClientSession.Failed, "Ungültige IP erkannt", ref f);
+            c4.Close();
+
+            // Discovery
+            var c5 = new ClientSession(); c5.Open();
+            for (int i = 0; i < 60 && c5.Found.Count == 0; i++) { c5.Discover(now() + i, 47123); host.Poll(now()); c5.Poll(now()); Thread.Sleep(10); }
+            Check(c5.Found.Count > 0, "LAN-Suche findet Lobby (" + (c5.Found.Count > 0 ? c5.Found[0].Ip : "-") + ")", ref f);
+            c5.Close();
+
+            // Match: Client läuft nach rechts und greift an; Host bleibt stehen
+            host.ResetMatch();
+            host.InMatch = true;
+            var hs = GameState.NewMatch(0, 1, 3, 0);
+            hs.phase = GameState.Fight; hs.phaseTimer = 0;
+            GameState pred = null;
+            var ev = new List<GameEvent>();
+            int clientHits = 0, maxErr = 0;
+            for (int t = 0; t < 240; t++)
+            {
+                host.Poll(now());
+                cl.Poll(now());
+                if (cl.NewSnapshot && cl.Auth != null)
+                {
+                    pred = cl.Auth.Clone();
+                    foreach (var ni in cl.Pending) Sim.Step(pred, new[] { pred.p[0].prevHeld, ni.Held }, new[] { 0, ni.Pressed }, null, true);
+                }
+                int h = t < 54 ? Btn.Left : (t % 30 == 0 ? Btn.Light : 0);
+                int pr = t < 54 ? (t == 0 ? Btn.Left : 0) : h;
+                cl.SendInput(h, pr);
+                if (pred != null) Sim.Step(pred, new[] { pred.p[0].prevHeld, h }, new[] { 0, pr }, null, true);
+                Thread.Sleep(2);
+                host.Poll(now());
+                int h1, p1;
+                host.TakeInput(out h1, out p1);
+                ev.Clear();
+                Sim.Step(hs, new[] { 0, h1 }, new[] { 0, p1 }, ev, false);
+                host.SendSnapshot(hs, ev);
+                foreach (var e in cl.NewEvents) if (e.Type == Ev.Hit) clientHits++;
+                cl.NewEvents.Clear();
+                if (pred != null && t > 20) maxErr = Math.Max(maxErr, (int)Math.Abs(pred.p[1].x - hs.p[1].x));
+            }
+            cl.Poll(now());
+            foreach (var e in cl.NewEvents) if (e.Type == Ev.Hit) clientHits++;
+            Check(hs.p[1].x < 200, "Host verarbeitet Client-Eingaben (Client-x=" + (int)hs.p[1].x + ")", ref f);
+            Check(hs.p[0].damage > 0, "Client-Angriff vom Host gewertet (Host-Schaden " + hs.p[0].damage.ToString("0.0") + ")", ref f);
+            Check(clientHits > 0, "Treffer-Ereignisse erreichen den Client (" + clientHits + ")", ref f);
+            Check(cl.AuthTick > 200, "Snapshots synchron (Tick " + cl.AuthTick + "/" + hs.tick + ")", ref f);
+            Check(maxErr < 40, "Vorhersage-Abweichung klein (max " + maxErr + " px)", ref f);
+            Check(Math.Abs(Tuning.RunSpeed - 9.4f) < 0.01f, "Tuning übertragen", ref f);
+
+            host.Close();
+            for (int i = 0; i < 20; i++) { cl.Poll(now()); Thread.Sleep(5); }
+            Check(cl.Status == ClientSession.Failed && cl.Error.Contains("geschlossen"), "Client erkennt geschlossene Lobby: \"" + cl.Error + "\"", ref f);
+            cl.Close();
+            return f;
+        }
+
+        // ---------------------------------------------------------------- Combos
+        // Trigger: 0 = n Frames nach dem vorigen Schritt, 1 = direkt nach dem Trefferstopp (perfekt), 2 = beim Greifen
+        class StepDef { public int Bits, Trigger, Wait, Hold; public StepDef(int b, int t, int w, int h) { Bits = b; Trigger = t; Wait = w; Hold = h; } }
+
+        static StepDef At(int bits, int wait) { return new StepDef(bits, 0, wait, 3); }
+        static StepDef OnHit(int bits) { return new StepDef(bits, 1, 0, 3); }
+        static StepDef OnHitHold(int bits, int hold) { return new StepDef(bits, 1, 0, hold); }
+        static StepDef OnGrab(int bits) { return new StepDef(bits, 2, 0, 3); }
+
+        static int comboChar = 0;
+
+        static void RunCombo(StepDef[] steps, float dummyX, float startDamage, out int hits, out int combo, out int perfects, out GameState st, bool trace)
+        {
+            var s = Fresh();
+            s.p[0].charId = comboChar; s.p[1].charId = comboChar == 0 ? 1 : 0;
+            var A = s.p[0]; var B = s.p[1];
+            A.x = 0; A.facing = 1; B.x = dummyX; B.facing = -1; B.damage = startDamage;
+            var ev = new List<GameEvent>();
+            hits = 0; combo = 0; perfects = 0;
+            int idx = 0, lastFire = 0, holdBits = 0, holdLeft = 0, hitsAtFire = 0;
+            for (int t = 0; t < 900 && (idx < steps.Length || holdLeft > 0 || A.state == St.Attack); t++)
+            {
+                int pressed = 0;
+                if (idx < steps.Length)
+                {
+                    StepDef sd = steps[idx];
+                    bool fire = false;
+                    if (sd.Trigger == 0) fire = t - lastFire >= sd.Wait;
+                    else if (sd.Trigger == 1) fire = hits > hitsAtFire && A.state == St.Attack && A.atkHit && A.hitlag == 0 && A.sinceHit == 2;
+                    else if (sd.Trigger == 3) fire = hits > hitsAtFire && A.state == St.Attack && A.atkHit && A.hitlag == 0 && A.sinceHit == 12;
+                    else fire = A.state == St.Grabbing && A.stateTime >= 6;
+                    if (fire)
+                    {
+                        holdBits = sd.Bits; holdLeft = sd.Hold; pressed = sd.Bits; lastFire = t; hitsAtFire = hits; idx++;
+                    }
+                }
+                int held = holdLeft > 0 ? holdBits : 0;
+                if (holdLeft > 0) holdLeft--;
+                Sim.Step(s, new[] { held, 0 }, new[] { pressed, 0 }, ev, false);
+                foreach (var e in ev)
+                {
+                    if (e.Type == Ev.Hit && e.Player == 1) hits++;
+                    if (e.Type == Ev.Perfect) perfects++;
+                }
+                ev.Clear();
+                combo = Math.Max(combo, A.combo);
+                if (trace) Console.WriteLine("    t" + t + " A:" + A.state + "/" + A.atk + " f" + A.atkFrame + " x" + (int)A.x + " y" + (int)A.y + " | B:" + B.state + " hs" + B.hitstun + " x" + (int)B.x + " y" + (int)B.y + " hits" + hits);
+                if (B.state == St.KO) break;
+            }
+            st = s;
+        }
+
+        static int TestCombos()
+        {
+            int f = 0;
+            foreach (int ch in new[] { 0, 2, 3 }) { comboChar = ch; f += TestCombosFor(ch); }
+            comboChar = 0;
+            return f;
+        }
+
+        static int TestCombosFor(int ch)
+        {
+            Console.WriteLine("Combos " + CharDef.All[ch].Name + " (perfektes Timing, Trainingspuppe):");
+            int f = 0;
+            int w = CharDef.All[ch].Weapon;
+            int L = Btn.Light, H = Btn.Heavy, J = Btn.Jump, R = Btn.Right, U = Btn.Up, D = Btn.Down;
+            var scythe = new[]
+            {
+                new { Name = "Erster Schnitt", X = 70f, Steps = new[] { At(L, 0), OnHit(R | L) }, Need = 2 },
+                new { Name = "Aufwärtsspirale", X = 70f, Steps = new[] { At(L, 0), OnHit(U | L), OnHitHold(J, 8), At(U | L, 5) }, Need = 3 },
+                new { Name = "Bodenschnitt-Kette", X = 90f, Steps = new[] { At(D | L, 0), OnHitHold(J, 8), At(R | L, 4), OnHitHold(J, 8), At(U | L, 4) }, Need = 3 },
+                new { Name = "Haken & Wurf", X = 80f, Steps = new[] { At(Btn.Grab, 0), OnGrab(D), OnHit(U | L), OnHitHold(J, 8), At(U | L, 5) }, Need = 3 },
+                new { Name = "Schnitter-Jagd", X = 100f, Steps = new[] { At(R | L, 0), OnHit(Btn.Dodge), At(R | L, 5), OnHit(R | H) }, Need = 3 },
+            };
+            var hammer = new[]
+            {
+                new { Name = "Steinschlag-Kette", X = 80f, Steps = new[] { At(L, 0), OnHit(R | L) }, Need = 2 },
+                new { Name = "Gipfelstürmer", X = 50f, Steps = new[] { At(U | L, 0), OnHitHold(J, 8), At(U | L, 4) }, Need = 2 },
+                new { Name = "Steingriff-Wurf", X = 80f, Steps = new[] { At(Btn.Grab, 0), OnGrab(D), OnHit(U | L), OnHitHold(J, 8), At(U | L, 4) }, Need = 3 },
+                new { Name = "Felsbrecher", X = 80f, Steps = new[] { At(L, 0), OnHit(R | H) }, Need = 2 },
+            };
+            var bow = new[]
+            {
+                new { Name = "Trittwirbel", X = 70f, Steps = new[] { At(L, 0), OnHit(R | L) }, Need = 2 },
+                new { Name = "Mondaufstieg", X = 50f, Steps = new[] { At(U | L, 0), OnHitHold(J, 8), At(U | L, 4) }, Need = 2 },
+                new { Name = "Gleitfalle", X = 90f, Steps = new[] { At(D | L, 0), OnHitHold(J, 8), At(R | L, 4) }, Need = 2 },
+                new { Name = "Rankenwurf", X = 170f, Steps = new[] { At(Btn.Grab, 0), OnGrab(D), OnHit(U | L), OnHitHold(J, 8), At(U | L, 4) }, Need = 3 },
+                new { Name = "Pfeilhagel", X = 80f, Steps = new[] { At(R | L, 0), OnHit(R | H) }, Need = 2 },
+            };
+            var combos = w == Weapon.Hammer ? hammer : w == Weapon.Bow ? bow : scythe;
+            foreach (var c in combos)
+            {
+                int hits, combo, perf; GameState s;
+                RunCombo(c.Steps, c.X, 0, out hits, out combo, out perf, out s, Environment.GetEnvironmentVariable("TRACE") == c.Name);
+                if (hits < c.Need && Environment.GetEnvironmentVariable("AUTOTRACE") == "1") RunCombo(c.Steps, c.X, 0, out hits, out combo, out perf, out s, true);
+                Check(hits >= c.Need && combo >= c.Need, c.Name + ": " + hits + " Treffer, Combo " + combo + ", " + perf + "x PERFEKT", ref f);
+            }
+            // Greifen geht durch den Schild
+            {
+                var s = Fresh();
+                s.p[0].x = 0; s.p[1].x = 80; s.p[1].facing = -1;
+                var ev = new List<GameEvent>(); var all = new List<GameEvent>();
+                for (int t = 0; t < 60; t++)
+                {
+                    int g = t == 12 ? Btn.Grab : 0, th = t >= 30 ? Btn.Up : 0;
+                    Sim.Step(s, new[] { g | th, Btn.Shield }, new[] { g | (t == 30 ? Btn.Up : 0), t == 0 ? Btn.Shield : 0 }, ev, false);
+                    all.AddRange(ev); ev.Clear();
+                }
+                Check(all.Exists(e => e.Type == Ev.Grab) && all.Exists(e => e.Type == Ev.Throw) && s.p[1].damage > 0, "Sensenhaken packt durch den Schild und wirft nach oben (Schaden " + s.p[1].damage + ")", ref f);
+            }
+            // Himmelsleiter: endlos mit perfektem Timing
+            {
+                var steps = new List<StepDef> { At(U | L, 0) };
+                for (int i = 0; i < 10; i++) { steps.Add(OnHitHold(J, 6)); steps.Add(At(U | L, 4)); }
+                int hits, combo, perf; GameState s;
+                RunCombo(steps.ToArray(), 40, 0, out hits, out combo, out perf, out s, Environment.GetEnvironmentVariable("TRACE") == "Himmel" + ch);
+                Check(combo >= 10 || (combo >= 6 && s.p[1].state == St.KO), "Himmelsleiter (endlos): Combo " + combo + ", " + perf + "x PERFEKT, Gegner " + (s.p[1].state == St.KO ? "K.O. oben raus" : "y=" + (int)s.p[1].y), ref f);
+            }
+            // Gegenprobe: ohne perfektes Timing (zu spät) reißt die Himmelsleiter ab
+            {
+                var steps = new List<StepDef> { At(U | L, 0) };
+                for (int i = 0; i < 10; i++) { steps.Add(new StepDef(J, 3, 0, 6)); steps.Add(At(U | L, 4)); }
+                int hits, combo, perf; GameState s;
+                RunCombo(steps.ToArray(), 40, 0, out hits, out combo, out perf, out s, false);
+                Check(combo < 10, "Gegenprobe: zu spätes Timing bricht ab (Combo " + combo + ")", ref f);
+            }
+            return f;
+        }
+
+        static int TestRecovery()
+        {
+            Console.WriteLine("Rettung nach Rauswurf:");
+            int f = 0;
+            var s = Fresh();
+            var P = s.p[0];
+            s.p[1].x = -300;
+            P.x = 1000; P.y = 150; P.vx = 6; P.vy = 2; P.onGround = false; P.state = St.Air; P.airJumps = Tuning.AirJumps; P.facing = -1;
+            var ev = new List<GameEvent>();
+            bool saved = false;
+            for (int t = 0; t < 400; t++)
+            {
+                int h = Btn.Left;
+                int pr = 0;
+                if (t == 1 || t == 22 || t == 44) { h |= Btn.Jump; pr = Btn.Jump; }
+                if (t == 64) { h |= Btn.Dodge | Btn.Up; pr = Btn.Dodge; }
+                if (t == 84) { h |= Btn.Heavy | Btn.Up; pr = Btn.Heavy; }
+                if (P.state == St.Wall && t % 6 == 0) { h |= Btn.Jump; pr = Btn.Jump; }
+                Sim.Step(s, new[] { h, 0 }, new[] { pr, 0 }, ev, false);
+                if (P.onGround && P.plat >= 0) { saved = true; break; }
+                if (P.state == St.KO) break;
+            }
+            Check(saved, "Aus x=1000 mit 3 Sprüngen + Dodge + Aufschwung zurück auf die Bühne (x=" + (int)P.x + ")", ref f);
+            // Plattformen mit einem Sprung erreichbar
+            s = Fresh();
+            s.p[0].x = -350;
+            for (int t = 0; t < 70; t++) Sim.Step(s, new[] { Btn.Jump, 0 }, new[] { t == 0 ? Btn.Jump : 0, 0 }, ev, false);
+            Check(s.p[0].onGround && s.p[0].plat == 1, "Seitliche Plattform mit einem Sprung erreichbar", ref f);
+            return f;
+        }
+
+        static void Shot(Renderer r, GameState s, string name, string[] names)
+        {
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                r.DrawBackground(g, 1280, 720, 0, 0);
+                r.DrawWorld(g, s, false);
+                r.DrawHud(g, s, names);
+                bmp.Save(System.IO.Path.Combine(outDir, name + ".png"), ImageFormat.Png);
+            }
+        }
+
+        static void Screenshots()
+        {
+            var r = new Renderer();
+            var s = Fresh();
+            var names = new[] { "Spieler 1", "Spieler 2" };
+            var ev = new List<GameEvent>();
+            s.p[0].x = -120; s.p[1].x = 120;
+            for (int i = 0; i < 30; i++) { Sim.Step(s, new[] { 0, 0 }, new[] { 0, 0 }, ev, false); r.Tick(); r.UpdateCamera(s); }
+            r.SnapCamera(s);
+            Shot(r, s, "shot_idle", names);
+            // P0 S-Heavy mitten im Schwung, P1 blockt
+            for (int t = 0; t < 22; t++)
+            {
+                ev.Clear();
+                Sim.Step(s, new[] { t < 2 ? Btn.Heavy | Btn.Right : 0, Btn.Shield | Btn.Left }, new[] { t == 0 ? Btn.Heavy : 0, t == 0 ? Btn.Shield | Btn.Left : 0 }, ev, false);
+                foreach (var e in ev) r.OnEvent(e, s);
+                r.Tick(); r.UpdateCamera(s);
+            }
+            Shot(r, s, "shot_attack", names);
+            // Luftkampf
+            s = Fresh();
+            s.p[0].x = -60; s.p[1].x = 60; s.p[1].damage = 45; s.p[0].damage = 112;
+            for (int t = 0; t < 40; t++)
+            {
+                ev.Clear();
+                int h0 = t < 3 ? Btn.Jump : (t == 14 ? Btn.Light | Btn.Right : (t > 14 && t < 17 ? Btn.Right : 0));
+                int h1 = t < 3 ? Btn.Jump : (t == 10 ? Btn.Jump : 0);
+                Sim.Step(s, new[] { h0, h1 }, new[] { (t == 0 || t == 14) ? h0 : 0, (t == 0 || t == 10) ? h1 : 0 }, ev, false);
+                foreach (var e in ev) r.OnEvent(e, s);
+                r.Tick(); r.UpdateCamera(s);
+            }
+            Shot(r, s, "shot_air", names);
+            s = Fresh();
+            s.p[0].x = -40; s.p[1].x = 40; s.p[1].facing = -1;
+            for (int t = 0; t < 16; t++)
+            {
+                ev.Clear();
+                Sim.Step(s, new[] { t == 0 ? Btn.Grab : 0, 0 }, new[] { t == 0 ? Btn.Grab : 0, 0 }, ev, false);
+                foreach (var e in ev) r.OnEvent(e, s);
+                r.Tick(); r.UpdateCamera(s);
+            }
+            Shot(r, s, "shot_grab", names);
+            // Brokk gegen Lyra: Lyra schießt, Brokk holt mit Rüstung aus
+            s = GameState.NewMatch(2, 3, 3, 0); s.phase = GameState.Fight; s.phaseTimer = 0;
+            s.p[0].x = -160; s.p[1].x = 200; s.p[1].facing = -1;
+            r.ClearFx();
+            for (int t = 0; t < 30; t++)
+            {
+                ev.Clear();
+                int h0 = t >= 6 ? Btn.Heavy | Btn.Right : 0, h1 = t >= 10 ? Btn.Heavy | Btn.Left : 0;
+                Sim.Step(s, new[] { h0, h1 }, new[] { t == 6 ? Btn.Heavy : 0, t == 10 ? Btn.Heavy : 0 }, ev, false);
+                foreach (var e in ev) r.OnEvent(e, s);
+                r.Tick(); r.UpdateCamera(s);
+            }
+            Shot(r, s, "shot_new1", new[] { "Brokk", "Lyra" });
+            for (int t = 0; t < 22; t++)
+            {
+                ev.Clear();
+                Sim.Step(s, new[] { 0, 0 }, new[] { 0, 0 }, ev, false);
+                foreach (var e in ev) r.OnEvent(e, s);
+                r.Tick(); r.UpdateCamera(s);
+            }
+            Shot(r, s, "shot_new2", new[] { "Brokk", "Lyra" });
+            var game = new Game();
+            for (int i = 0; i < 5; i++) game.Tick();
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_menu.png"), ImageFormat.Png); }
+            Settings.P1Char = 2; Settings.P2Char = 3;
+            game.DebugScreen(Scr.Local);
+            for (int i = 0; i < 3; i++) game.Tick();
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_select.png"), ImageFormat.Png); }
+            game.DebugScreen(Scr.Combos);
+            for (int i = 0; i < 3; i++) game.Tick();
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_combos.png"), ImageFormat.Png); }
+        }
+    }
+}
