@@ -183,7 +183,8 @@ namespace Sensensturm
             if (!cpuOnly) Add("Kampf starten!", null, StartTourMatch, null);
             else if (!tour.AutoCpu) { Add("Zuschauen", null, StartTourMatch, null); Add("Ergebnis ausrechnen", null, SimulateTourMatch, null); }
             if (tour.LastKey >= 0) AddTourReplay("Letztes Match ansehen", tour.LastKey);
-            Add("Turnier verlassen", null, () => Go(Scr.Main), null);
+            Add("Neues Turnier", null, () => { tour = null; Go(Scr.TourneySetup); }, null);
+            Add("Zum Hauptmenü", null, () => Go(Scr.Main), null);
             if (sel >= items.Count) sel = 0;
             if (!items[sel].Enabled) sel = NextSel(1);
         }

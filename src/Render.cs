@@ -1896,7 +1896,7 @@ namespace Sensensturm
             DrawArena(g);
             DrawDecor(g);
             g.Restore(gs);
-            using (var b = new SolidBrush(Color.FromArgb(120, 6, 2, 14))) g.FillRectangle(b, 0, 0, VW, VH);
+            using (var b = new SolidBrush(Color.FromArgb(170, 6, 2, 14))) g.FillRectangle(b, 0, 0, VW, VH);
         }
 
         // kleiner Kopf als Symbol (Turnierbaum), alpha 0..1

@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Sensensturm
 {
-    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney, Replays }
+    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney, Replays, Multiplayer, Extras }
     public enum Mode { Local, Host, Client }
 
     class Item
@@ -297,16 +297,18 @@ namespace Sensensturm
             switch (scr)
             {
                 case Scr.Local: Go(Scr.Main); break;
-                case Scr.Host: CloseHost(); Go(Scr.Main); break;
-                case Scr.Join: LeaveClient(); Go(Scr.Main); break;
-                case Scr.OnlineJoin: LeaveClient(); Go(Scr.Main); break;
-                case Scr.ClientLobby: LeaveClient(); Go(Scr.Main); break;
+                case Scr.Host: CloseHost(); Go(Scr.Multiplayer); break;
+                case Scr.Join: LeaveClient(); Go(Scr.Multiplayer); break;
+                case Scr.OnlineJoin: LeaveClient(); Go(Scr.Multiplayer); break;
+                case Scr.ClientLobby: LeaveClient(); Go(Scr.Multiplayer); break;
                 case Scr.Settings: Settings.Save(); Go(Scr.Main); break;
                 case Scr.Controls: Settings.Save(); Go(Scr.Settings); break;
-                case Scr.Combos: Go(Scr.Settings); break;
+                case Scr.Combos: Go(Scr.Extras); break;
                 case Scr.TourneySetup: Go(Scr.Main); break;
                 case Scr.Tourney: Go(Scr.Main); break;
-                case Scr.Replays: Go(Scr.Main); break;
+                case Scr.Replays: Go(Scr.Extras); break;
+                case Scr.Multiplayer: Go(Scr.Main); break;
+                case Scr.Extras: Go(Scr.Main); break;
             }
         }
 
@@ -332,16 +334,27 @@ namespace Sensensturm
             switch (scr)
             {
                 case Scr.Main:
-                    Add("Lokal spielen", null, () => Go(Scr.Local), null);
-                    Add("Turnier (bis 16 Spieler)", null, () => Go(Scr.TourneySetup), null);
-                    if (tour != null && !tour.Done) Add("Turnier fortsetzen", null, () => Go(Scr.Tourney), null);
+                    {
+                        bool tourRunning = tour != null && !tour.Done;
+                        Add("Lokal spielen", null, () => Go(Scr.Local), null);
+                        Add(tourRunning ? "Turnier fortsetzen" : "Turnier", null, () => Go(tourRunning ? Scr.Tourney : Scr.TourneySetup), null);
+                        Add("Online & LAN", null, () => Go(Scr.Multiplayer), null);
+                        Add("Extras", null, () => Go(Scr.Extras), null);
+                        Add("Einstellungen", null, () => { nameText = Settings.PlayerName; setPortText = Settings.Port.ToString(); Go(Scr.Settings); }, null);
+                        Add("Beenden", null, () => Running = false, null);
+                        break;
+                    }
+                case Scr.Multiplayer:
                     Add("Online-Spiel erstellen", null, StartOnlineHost, null);
                     Add("Online-Spiel beitreten", null, () => { LeaveClient(); Go(Scr.OnlineJoin); }, null);
                     Add("LAN-Spiel erstellen", null, StartHost, null);
                     Add("LAN-Spiel beitreten", null, () => { Go(Scr.Join); OpenJoin(); }, null);
+                    Add("Zurück", null, () => Go(Scr.Main), null);
+                    break;
+                case Scr.Extras:
+                    Add("Combos lernen", null, () => { comboWeapon = CharDef.All[Settings.P1Char].Weapon; Go(Scr.Combos); }, null);
                     Add("Wiederholungen", null, () => { replayFiles = null; Go(Scr.Replays); }, null);
-                    Add("Einstellungen", null, () => { nameText = Settings.PlayerName; setPortText = Settings.Port.ToString(); Go(Scr.Settings); }, null);
-                    Add("Spiel verlassen", null, () => Running = false, null);
+                    Add("Zurück", null, () => Go(Scr.Main), null);
                     break;
                 case Scr.Local:
                     {
@@ -363,14 +376,14 @@ namespace Sensensturm
                     Add("Arena", StageDef.Names[Settings.Stage], null, d => Settings.Stage = Cycle(Settings.Stage, d, StageDef.Count));
                     Add(host != null && host.HasClient ? "Match starten" : "Match starten (warte auf Spieler 2)", null, StartHostMatch, null, host != null && host.HasClient);
                     if (online) Add("Raum-Code kopieren", null, () => { try { Clipboard.SetText(link.Code); Toast("Code " + link.Code + " kopiert – schick ihn deinem Mitspieler.", false); } catch { } }, null);
-                    Add("Lobby schließen", null, () => { CloseHost(); Go(Scr.Main); }, null);
+                    Add("Lobby schließen", null, () => { CloseHost(); Go(Scr.Multiplayer); }, null);
                     break;
                 case Scr.OnlineJoin:
                     {
                         bool busy = link != null && client != null;
                         Add("Raum-Code", editing == 4 ? codeText + (frame % 60 < 30 ? "|" : " ") : (codeText.Length > 0 ? codeText : "(eingeben)"), null, null, !busy, 4);
                         Add(busy ? "Verbinde ..." : "Verbinden", null, ConnectOnline, null, !busy);
-                        Add("Zurück", null, () => { LeaveClient(); Go(Scr.Main); }, null);
+                        Add("Zurück", null, () => { LeaveClient(); Go(Scr.Multiplayer); }, null);
                         break;
                     }
                 case Scr.Join:
@@ -385,7 +398,7 @@ namespace Sensensturm
                                 FoundHost ff = f;
                                 Add("Gefunden: " + f.Name, f.Ip + (f.Full ? "  (voll)" : ""), () => { ipText = ff.Ip; ConnectClient(); }, null, !busy && !f.Full);
                             }
-                        Add("Zurück", null, () => { LeaveClient(); Go(Scr.Main); }, null);
+                        Add("Zurück", null, () => { LeaveClient(); Go(Scr.Multiplayer); }, null);
                         break;
                     }
                 case Scr.ClientLobby:
@@ -397,10 +410,10 @@ namespace Sensensturm
                             Settings.P1Char = client.WantChar;
                             client.SendHello();
                         });
-                    Add("Verbindung trennen", null, () => { LeaveClient(); Go(Scr.Main); }, null);
+                    Add("Verbindung trennen", null, () => { LeaveClient(); Go(Scr.Multiplayer); }, null);
                     break;
                 case Scr.Settings:
-                    Add("Combos lernen", null, () => { comboWeapon = CharDef.All[Settings.P1Char].Weapon; Go(Scr.Combos); }, null);
+                    // Reihenfolge = Anzeige: 0-4 linke Spalte (Bild & Ton), 5-10 rechte Spalte (Spiel & Steuerung), 11 Zurück
                     Add("Lautstärke", Settings.Volume + " / 10", null, d => { Settings.Volume = Math.Max(0, Math.Min(10, Settings.Volume + d)); Audio.Volume = Settings.Volume / 10f; });
                     Add("Bildschirmwackeln", OnOff(Settings.ScreenShake), null, d => Settings.ScreenShake = !Settings.ScreenShake);
                     Add("Vollbild (F11)", OnOff(Settings.Fullscreen), null, d => { Settings.Fullscreen = !Settings.Fullscreen; if (SetFullscreen != null) SetFullscreen(Settings.Fullscreen); });
@@ -410,8 +423,8 @@ namespace Sensensturm
                     Add("LAN-Port", editing == 3 ? setPortText + (frame % 60 < 30 ? "|" : " ") : Settings.Port.ToString(), null, null, true, 3);
                     Add("Steuerung Spieler 1", null, () => { ctrlPlayer = 0; ctrlCol = 0; Go(Scr.Controls); }, null);
                     Add("Steuerung Spieler 2", null, () => { ctrlPlayer = 1; ctrlCol = 0; Go(Scr.Controls); }, null);
-                    Add("Spielwerte neu laden (tuning.ini)", null, () => { Tuning.Load(); Toast("Spielwerte aus tuning.ini geladen.", false); }, null);
-                    Add("tuning.ini im Editor öffnen", null, () => { try { Tuning.Save(); Process.Start("notepad.exe", "\"" + Tuning.FilePath + "\""); } catch { Toast("Editor konnte nicht geöffnet werden.", true); } }, null);
+                    Add("Spielwerte neu laden", null, () => { Tuning.Load(); Toast("Spielwerte aus tuning.ini geladen.", false); }, null);
+                    Add("Spielwerte bearbeiten (tuning.ini)", null, () => { try { Tuning.Save(); Process.Start("notepad.exe", "\"" + Tuning.FilePath + "\""); } catch { Toast("Editor konnte nicht geöffnet werden.", true); } }, null);
                     Add("Zurück", null, () => { Settings.Save(); Go(Scr.Main); }, null);
                     break;
                 case Scr.Controls:
@@ -444,7 +457,7 @@ namespace Sensensturm
                         if (Settings.P2Char == Settings.P1Char) Settings.P2Char = CharDef.Next(Settings.P1Char, 1, Settings.P1Char);
                         Go(Scr.Local);
                     }, null);
-                    Add("Zurück", null, () => Go(Scr.Settings), null);
+                    Add("Zurück", null, () => Go(Scr.Extras), null);
                     break;
             }
         }
@@ -906,7 +919,7 @@ namespace Sensensturm
                         using (var b = new LinearGradientBrush(rect, Color.FromArgb(220, 110, 60, 170), Color.FromArgb(220, 40, 80, 170), LinearGradientMode.Horizontal)) g.FillPath(b, path);
                         using (var p = new Pen(Color.FromArgb(230, 230, 200, 255), 2.5f)) g.DrawPath(p, path);
                     }
-                    else using (var b = new SolidBrush(Color.FromArgb(150, 16, 10, 30))) g.FillPath(b, path);
+                    else using (var b = new SolidBrush(Color.FromArgb(228, 18, 11, 34))) g.FillPath(b, path);
                 }
                 Font f = it.Small ? R.FSmall : R.FMed;
                 Color tc = !it.Enabled ? Color.FromArgb(120, 150, 140, 170) : s ? Color.White : Color.FromArgb(215, 205, 235);
@@ -941,6 +954,17 @@ namespace Sensensturm
             }
         }
 
+        // Kasten mit Überschrift, der zusammengehörige Menüpunkte gruppiert
+        void GroupPanel(Graphics g, float x, float y, float w, float h, string title)
+        {
+            using (var path = Renderer.RoundRect(x, y, w, h, 16))
+            {
+                using (var b = new SolidBrush(Color.FromArgb(150, 10, 5, 22))) g.FillPath(b, path);
+                using (var p = new Pen(Color.FromArgb(110, 180, 140, 255), 1.5f)) g.DrawPath(p, path);
+            }
+            Line(g, title.ToUpper(), x + 22, y + 12, Color.FromArgb(200, 200, 170, 255), R.FHudName);
+        }
+
         void Line(Graphics g, string t, float x, float y, Color c, Font f = null)
         {
             using (var b = new SolidBrush(c)) g.DrawString(t, f ?? R.FSmall, b, x, y);
@@ -955,8 +979,28 @@ namespace Sensensturm
                     DrawTitle(g, "Ein Plattform-Kampfspiel mit Sensen und Schilden");
                     R.DrawPortrait(g, 0, 210, 600, 2.1f, frame, false);
                     R.DrawPortrait(g, 1, 1070, 600, -2.1f, frame + 40, false);
-                    DrawItems(g, 400, 172, 480, 40, 6);
+                    DrawItems(g, 420, 196, 440, 52, 12);
                     Line(g, "Steuerung: Pfeiltasten/WASD · Enter/Leertaste · Esc  —  oder Maus / Controller", 350, 690, dim, R.FTiny);
+                    break;
+                case Scr.Multiplayer:
+                    DrawTitle(g, "Online & LAN");
+                    GroupPanel(g, 140, 176, 480, 270, "Über das Internet");
+                    DrawItems(g, 165, 222, 430, 50, 12, 0, 2);
+                    Line(g, "Raum-Code mit Freunden teilen. Klappt auch über", 168, 362, info, R.FTiny);
+                    Line(g, "verschiedene Netzwerke, ohne Portfreigabe.", 168, 382, info, R.FTiny);
+                    GroupPanel(g, 660, 176, 480, 270, "Im selben Netzwerk (LAN)");
+                    DrawItems(g, 685, 222, 430, 50, 12, 2, 2);
+                    Line(g, "Für PCs im selben WLAN oder LAN. Beim ersten Hosten", 688, 362, info, R.FTiny);
+                    Line(g, "die Windows-Firewall für private Netzwerke erlauben.", 688, 382, info, R.FTiny);
+                    DrawItems(g, 490, 480, 300, 46, 0, 4, 1);
+                    break;
+                case Scr.Extras:
+                    DrawTitle(g, "Extras");
+                    DrawItems(g, 420, 196, 440, 52, 0, 0, 1);
+                    Line(g, "Alle Combos und Spezialangriffe je Waffe, mit Training gegen die Puppe", 640 - 250, 254, dim, R.FTiny);
+                    DrawItems(g, 420, 300, 440, 52, 0, 1, 1);
+                    Line(g, "Gespeicherte Matches noch einmal ansehen", 640 - 145, 358, dim, R.FTiny);
+                    DrawItems(g, 490, 420, 300, 46, 0, 2, 1);
                     break;
                 case Scr.Local:
                     DrawTitle(g, "Lokal spielen");
@@ -1050,7 +1094,11 @@ namespace Sensensturm
                     }
                 case Scr.Settings:
                     DrawTitle(g, "Einstellungen");
-                    DrawItems(g, 330, 160, 620, 38, 6);
+                    GroupPanel(g, 60, 168, 570, 352, "Bild & Ton");
+                    DrawItems(g, 80, 214, 530, 44, 8, 0, 5);
+                    GroupPanel(g, 650, 168, 570, 352, "Spiel & Steuerung");
+                    DrawItems(g, 670, 214, 530, 44, 8, 5, 6);
+                    DrawItems(g, 490, 548, 300, 46, 0, 11, 1);
                     break;
                 case Scr.Combos:
                     DrawCombos(g);

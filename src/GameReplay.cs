@@ -228,7 +228,7 @@ namespace Sensensturm
                 });
             }
             Add("Ordner öffnen", null, () => { try { Directory.CreateDirectory(Replay.Folder); Process.Start("explorer.exe", "\"" + Replay.Folder + "\""); } catch { } }, null);
-            Add("Zurück", null, () => Go(Scr.Main), null);
+            Add("Zurück", null, () => Go(Scr.Extras), null);
         }
 
         void DrawReplayList(Graphics g)

@@ -8,7 +8,7 @@
 | **Brokk, der Steinwächter** (Golem) | **Hammer** | langsam und schwer, extrem harte Treffer, **Super-Rüstung** beim Ausholen schwerer Angriffe (wird nicht unterbrochen), **Bebenwelle** rollt über den Boden |
 | **Lyra, die Sternenschützin** (Jägerin) | **Bogen** | schnell und leicht, Tritt-Combos, **aufladbare Sternenpfeile** (vorwärts, schräg nach oben, aus der Luft mit Rückstoß), **Rankenseil** greift aus großer Entfernung |
 
-Jeder Typ hat ein eigenes Moveset (16 Angriffe + Griff/Wurf + Ultimate) und eigene Werte für Tempo, Sprungkraft, Fallgeschwindigkeit und Gewicht. Die Auswahl erfolgt unter „Lokal spielen“ bzw. in der LAN-Lobby (beide Spieler wählen selbst). Combos für jeden Typ stehen unter *Einstellungen > Combos lernen* (Links/Rechts wechselt die Waffe) und im Kampf jederzeit mit **F1** (Controller: *Back*) oder über *Pause > Combos ansehen*.
+Jeder Typ hat ein eigenes Moveset (16 Angriffe + Griff/Wurf + Ultimate) und eigene Werte für Tempo, Sprungkraft, Fallgeschwindigkeit und Gewicht. Die Auswahl erfolgt unter „Lokal spielen“ bzw. in der LAN-Lobby (beide Spieler wählen selbst). Combos für jeden Typ stehen unter *Extras > Combos lernen* (Links/Rechts wechselt die Waffe) und im Kampf jederzeit mit **F1** (Controller: *Back*) oder über *Pause > Combos ansehen*.
 Alle Grafiken werden im Code gezeichnet, alle Sounds werden synthetisiert. Es gibt keine fremden Assets.
 
 ## Arenen
@@ -32,7 +32,7 @@ Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 **CPU-Gegner:** Leicht, mittel und schwer unterscheiden sich in Reaktion, Tempo und Combos. Hat der Gegner viel Schaden, spielt die CPU gezielt auf K.O.: Sie setzt starke Angriffe ein, bewacht die Kante und schlägt Gegner beim Zurückkommen wieder hinaus. Sich selbst rettet sie mit Sprüngen, Wandsprüngen, Aufschwung und Luft-Dodge.
 
 ## Wiederholungen
-Lokale und selbst gehostete Matches werden automatisch aufgezeichnet. Im Ergebnisbildschirm gibt es **Wiederholung ansehen** und **Speichern** (Ordner `replays` neben der .exe). Gespeicherte Wiederholungen findest du im Hauptmenü unter **Wiederholungen**. In der Wiedergabe gilt: Enter = Pause, Links/Rechts = Tempo (1×/2×/4×), Esc = Ende. Im Turnier lassen sich das letzte Match und das Finale noch einmal ansehen, auch ausgerechnete CPU-Matches.
+Lokale und selbst gehostete Matches werden automatisch aufgezeichnet. Im Ergebnisbildschirm gibt es **Wiederholung ansehen** und **Speichern** (Ordner `replays` neben der .exe). Gespeicherte Wiederholungen findest du unter *Extras > Wiederholungen*. In der Wiedergabe gilt: Enter = Pause, Links/Rechts = Tempo (1×/2×/4×), Esc = Ende. Im Turnier lassen sich das letzte Match und das Finale noch einmal ansehen, auch ausgerechnete CPU-Matches.
 Eine Wiederholung speichert nur die Eingaben (meist wenige KB) und spielt das Match exakt nach. Dateien aus einer anderen Spielversion werden deshalb abgelehnt. Als Online-Client gibt es keine Aufnahme, weil dort die Eingaben des Hosts fehlen.
 
 ## Turnier (bis zu 16 Spieler)
@@ -46,7 +46,7 @@ Gespielt wird im K.-o.-System, alle Menschen nacheinander am selben PC: Gegen di
 Der **Turnierbaum** ist animiert. Die Teilnehmer fliegen nacheinander ein, die Linie des Siegers läuft leuchtend in die nächste Runde, wo sein Name aufploppt, und Verlierer werden ausgegraut und durchgestrichen. Das nächste Match pulsiert mit einer VS-Marke. Am Ende gibt es eine Siegerehrung mit Pokal und Konfetti. Ein laufendes Turnier lässt sich verlassen und im Hauptmenü mit **Turnier fortsetzen** wieder aufnehmen, solange das Spiel offen bleibt.
 
 ## Online-Spiel (über das Internet, verschiedene Netzwerke)
-1. Host: **Online-Spiel erstellen**. Es erscheint ein 6-stelliger **Raum-Code** (mit „Raum-Code kopieren“ in die Zwischenablage).
+1. Host: *Online & LAN >* **Online-Spiel erstellen**. Es erscheint ein 6-stelliger **Raum-Code** (mit „Raum-Code kopieren“ in die Zwischenablage).
 2. Mitspieler: **Online-Spiel beitreten**, Code eingeben, **Verbinden**.
 3. Beide wählen ihren Charakter, dann startet der Host das Match.
 
@@ -54,7 +54,7 @@ Keine Portfreigabe nötig: Beide PCs treffen sich über einen öffentlichen Verm
 Hinweis: Der Vermittlungsserver ist ein öffentlicher Testdienst (broker.hivemq.com, Ersatz: broker.emqx.io, test.mosquitto.org). Er ist meist zuverlässig, aber ohne Garantie.
 
 ## LAN-Spiel (zwei PCs im selben WLAN/LAN)
-1. PC 1: **LAN-Spiel erstellen**. IP-Adresse und Port (Standard 7777) werden angezeigt.
+1. PC 1: *Online & LAN >* **LAN-Spiel erstellen**. IP-Adresse und Port (Standard 7777) werden angezeigt.
 2. PC 2: **LAN-Spiel beitreten**. Die Lobby erscheint meist automatisch unter „Gefunden“, sonst die IP eintippen und **Verbinden** wählen.
 3. PC 1 wählt **Match starten**. Über Esc beendet der Host das Match wieder (zurück zur Lobby).
 
@@ -80,7 +80,7 @@ Esc/Start = Pause · F1/Back = Combos ansehen · F11 = Vollbild · F3 = Hitboxen
 - **Bewegung:** sofortige Beschleunigung, variable Sprunghöhe, 3 Luftsprünge, Coyote-Time, Schnellfallen (Unten in der Luft), Dash und Sprint, Luft-Dodge in 8 Richtungen (einmal pro Luftphase, mit Abklingzeit), Wandrutschen und Wandsprung an den Seiten der Hauptplattform, Schwebeplattformen (Unten + Springen zum Durchfallen).
 - **Sense, leichte Angriffe:** neutral, vorne, oben, unten (Boden) sowie neutral, vorne, oben, unten (Luft).
 - **Sense, schwere Angriffe:** schwerer Seitenhieb (aufladbar), *Seelenernte* (lange aufladbar, viel Schaden, aber großes Risiko: Treffer beim Aufladen machen +25 % Schaden), Erdspalter, schwerer Luftschwung, Fallbeil (Sturz mit Aufprall-Schockwelle) und Aufschwung (Recovery nach oben, einmal pro Luftphase).
-- **Combos:** Nur nach einem echten Treffer gibt es ein kurzes Cancel-Fenster in einen *anderen* Angriff, einen Sprung, einen Dodge oder einen Griff. Verfehlte Angriffe lassen sich nicht abbrechen. Alle Combos zum Lernen stehen unter *Einstellungen > Combos lernen*. Üben kannst du sie gegen die *Trainingspuppe* (Lokal spielen > Gegner).
+- **Combos:** Nur nach einem echten Treffer gibt es ein kurzes Cancel-Fenster in einen *anderen* Angriff, einen Sprung, einen Dodge oder einen Griff. Verfehlte Angriffe lassen sich nicht abbrechen. Alle Combos zum Lernen stehen unter *Extras > Combos lernen*. Üben kannst du sie gegen die *Trainingspuppe* (Lokal spielen > Gegner).
 - **PERFEKT-Timing:** Drückst du die nächste Taste kurz *nach* dem Trefferstopp (nicht schon vorher), erscheint PERFEKT. Der Gegner bleibt länger betäubt, ein perfekter Sprung kostet keinen Luftsprung und zielt automatisch auf den Gegner. Perfekte Ketten reißen deshalb nicht ab (z. B. die Himmelsleiter bis zum K.O.).
 - **Verfolgungs-Dodge:** Dodge direkt nach einem Treffer jagt dem Gegner hinterher.
 - **Sensenhaken:** Greifen geht durch Schild und Parade. Danach wirfst du per Richtung nach vorne, hinten, oben oder unten. Ein Wurf nach unten eignet sich als Combo-Starter.

@@ -953,6 +953,13 @@ namespace Sensensturm
             for (int i = 0; i < 5; i++) game.Tick();
             using (var bmp = new Bitmap(1280, 720))
             using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_menu.png"), ImageFormat.Png); }
+            foreach (var ms in new[] { Scr.Multiplayer, Scr.Extras, Scr.Settings })
+            {
+                game.DebugScreen(ms);
+                for (int i = 0; i < 3; i++) game.Tick();
+                using (var bmp = new Bitmap(1280, 720))
+                using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_" + ms.ToString().ToLower() + ".png"), ImageFormat.Png); }
+            }
             Settings.P1Char = 2; Settings.P2Char = 3;
             game.DebugScreen(Scr.Local);
             for (int i = 0; i < 3; i++) game.Tick();
