@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace Sensensturm
 {
-    public enum Sfx { Swing, SwingHeavy, Hit, HitHeavy, Block, Parry, Break, KO, Jump, AirJump, Land, Dash, Dodge, Clank, Menu, Select, Beep, Go, Charge, Shock, Count }
+    public enum Sfx { Swing, SwingHeavy, Hit, HitHeavy, Block, Parry, Break, KO, Jump, AirJump, Land, Dash, Dodge, Clank, Menu, Select, Beep, Go, Charge, Shock, Ult, Count }
 
     // Kleiner Software-Mixer über waveOut. Alle Klänge werden beim Start synthetisiert (keine Dateien nötig).
     public static class Audio
@@ -229,6 +229,7 @@ namespace Sensensturm
             clips[(int)Sfx.Go] = Mix(Tone(0.45f, 780, 780, 0.3f, true), Tone(0.45f, 1040, 1040, 0.2f, true));
             clips[(int)Sfx.Charge] = Bell(0.3f, new float[] { 1760, 2640 }, 10, 0.3f, 0.2f);
             clips[(int)Sfx.Shock] = Thump(0.35f, 80, 40, 2f, 0.7f, 3f);
+            clips[(int)Sfx.Ult] = Mix(Bell(1.3f, new float[] { 440, 660, 880, 1320 }, 2.2f, 0.32f, 0.8f), Tone(0.8f, 160, 1400, 0.16f, false), Whoosh(0.9f, 0.15f, 0.9f, 0.4f), Thump(0.5f, 90, 40, 1.8f, 0.6f, 3f));
         }
     }
 }

@@ -24,6 +24,7 @@ namespace Sensensturm
             fails += TestNetwork();
             if (Environment.GetEnvironmentVariable("ONLINE") == "1") { fails += TestOnline(false); fails += TestOnline(true); }
             fails += TestCombos();
+            fails += TestNewMoves();
             fails += TestRecovery();
             fails += TestStages();
             Screenshots();
@@ -555,6 +556,125 @@ namespace Sensensturm
             return f;
         }
 
+        static GameState Duel(int c0, int c1, float x1)
+        {
+            var s = GameState.NewMatch(c0, c1, 3, 0);
+            s.phase = GameState.Fight;
+            s.phaseTimer = 0;
+            s.p[0].x = 0; s.p[0].facing = 1;
+            s.p[1].x = x1; s.p[1].facing = x1 >= 0 ? -1 : 1;
+            return s;
+        }
+
+        // input(t) liefert die gehaltenen Tasten beider Spieler; gedrückt = neu gegenüber dem Vorframe
+        static List<GameEvent> Play(GameState s, int frames, Func<int, int[]> input)
+        {
+            var all = new List<GameEvent>(); var ev = new List<GameEvent>();
+            int[] prev = { 0, 0 };
+            for (int t = 0; t < frames; t++)
+            {
+                int[] h = input(t);
+                Sim.Step(s, h, new[] { h[0] & ~prev[0], h[1] & ~prev[1] }, ev, false);
+                prev = h;
+                all.AddRange(ev); ev.Clear();
+            }
+            return all;
+        }
+
+        static int TestNewMoves()
+        {
+            Console.WriteLine("Neue Angriffe und Ultimate:");
+            int f = 0;
+            // Ultimate braucht eine volle Leiste
+            {
+                var s = Duel(0, 1, 120);
+                Play(s, 3, t => new[] { t == 0 ? Btn.Ult : 0, 0 });
+                Check(s.p[0].atk != Attacks.Ult && s.p[1].damage == 0, "Ultimate ohne volle Leiste löst nicht aus", ref f);
+            }
+            // Leiste füllt sich durch Treffer
+            {
+                var s = Duel(0, 1, 70);
+                Play(s, 30, t => new[] { t == 0 ? Btn.Light : 0, 0 });
+                float dmg = Attacks.Sets[Weapon.Scythe][Attacks.NLight].Damage;
+                Check(Math.Abs(s.p[0].ult - dmg * Tuning.UltGainDeal) < 0.01f && Math.Abs(s.p[1].ult - dmg * Tuning.UltGainTake) < 0.01f,
+                    "Leiste füllt sich: Angreifer " + s.p[0].ult + ", Getroffener " + s.p[1].ult, ref f);
+            }
+            // jede Ultimate: Zeitstopp, Treffer, Leiste leer
+            foreach (var u in new[] { new { Ch = 0, X = 150f }, new { Ch = 2, X = 200f }, new { Ch = 2, X = -220f }, new { Ch = 3, X = 520f } })
+            {
+                var s = Duel(u.Ch, 1, u.X);
+                s.p[0].ult = Tuning.UltMax;
+                var all = Play(s, 1, t => new[] { Btn.Ult, 0 });
+                bool frozen = s.p[1].hitlag >= Tuning.UltFreeze - 1;
+                all.AddRange(Play(s, 100, t => new[] { 0, 0 }));
+                string nm = Attacks.SetOf(u.Ch)[Attacks.Ult].Name;
+                Check(frozen && s.p[0].ult == 0 && all.Exists(e => e.Type == Ev.Ult) && s.p[1].damage >= 25,
+                    "Ultimate " + nm + " (" + CharDef.All[u.Ch].Name + ", Gegner bei x=" + u.X + "): Zeitstopp " + frozen + ", Schaden " + s.p[1].damage, ref f);
+            }
+            // Ultimate zerbricht den Schild
+            {
+                var s = Duel(2, 1, 160);
+                s.p[0].ult = Tuning.UltMax;
+                var all = Play(s, 80, t => new[] { t >= 20 && t < 22 ? Btn.Ult : 0, Btn.Shield });
+                Check(all.Exists(e => e.Type == Ev.ShieldBreak), "Weltenbrecher zerbricht einen gehaltenen Schild", ref f);
+            }
+            // Ultimate als Combo-Abschluss
+            {
+                var s = Duel(0, 1, 70);
+                s.p[0].ult = Tuning.UltMax;
+                bool fired = false;
+                Play(s, 120, t =>
+                {
+                    int h = t == 0 ? Btn.Light : 0;
+                    if (!fired && s.p[0].atk == Attacks.NLight && s.p[0].atkHit && s.p[0].hitlag == 0 && s.p[0].sinceHit >= Tuning.ComboCancelDelay) { h = Btn.Ult; fired = true; }
+                    return new[] { h, 0 };
+                });
+                Check(s.p[0].statBestCombo >= 2 && s.p[1].damage >= 35, "Leicht > Ultimate als Combo: Combo " + s.p[0].statBestCombo + ", Schaden " + s.p[1].damage, ref f);
+            }
+            // Angriff aus dem Lauf und Hochschlag für jede Waffe
+            foreach (int ch in new[] { 0, 2, 3 })
+            {
+                var s = Duel(ch, 1, 600);
+                bool dashAtk = false;
+                Play(s, 30, t =>
+                {
+                    if (s.p[0].atk == Attacks.DashAtk) dashAtk = true;
+                    return new[] { Btn.Right | (t == 0 ? Btn.Dodge : 0) | (t == 4 ? Btn.Light : 0), 0 };
+                });
+                if (s.p[0].atk == Attacks.DashAtk) dashAtk = true;
+                s = Duel(ch, 1, 600);
+                bool up = false;
+                Play(s, 12, t => { if (s.p[0].atk == Attacks.UHeavy) up = true; return new[] { Btn.Up | (t == 0 ? Btn.Heavy : 0), 0 }; });
+                if (s.p[0].atk == Attacks.UHeavy) up = true;
+                string w = CharDef.All[ch].Name;
+                Check(dashAtk, w + ": Dash + Leicht = " + Attacks.SetOf(ch)[Attacks.DashAtk].Name, ref f);
+                Check(up, w + ": Oben + Schwer = " + Attacks.SetOf(ch)[Attacks.UHeavy].Name, ref f);
+            }
+            // Hochschlag trifft einen Gegner über einem
+            {
+                var s = Duel(0, 1, 30);
+                s.p[1].y = -140; s.p[1].onGround = false; s.p[1].state = St.Air; s.p[1].vy = 0;
+                Play(s, 30, t => new[] { Btn.Up | (t == 0 ? Btn.Heavy : 0), 0 });
+                Check(s.p[1].damage > 0 && s.p[1].vy < 0, "Mondaufgang trifft den Gegner über einem und schleudert ihn hoch (Schaden " + s.p[1].damage + ")", ref f);
+            }
+            // CPU nutzt die Ultimate
+            {
+                var s = Duel(1, 0, 120);
+                s.p[1].x = 120; s.p[0].x = 0;
+                s.p[1].ult = Tuning.UltMax;
+                var bot = new Bot(3);
+                bool used = false;
+                for (int t = 0; t < 120 && !used; t++)
+                {
+                    int h, p; bot.Think(s, 1, out h, out p);
+                    Sim.Step(s, new[] { 0, h }, new[] { 0, p }, null, false);
+                    if (s.p[1].atk == Attacks.Ult) used = true;
+                }
+                Check(used, "CPU (schwer) setzt die Ultimate ein", ref f);
+            }
+            return f;
+        }
+
         static int TestRecovery()
         {
             Console.WriteLine("Rettung nach Rauswurf:");
@@ -735,6 +855,24 @@ namespace Sensensturm
                 r.Tick(); r.UpdateCamera(s);
             }
             Shot(r, s, "shot_new2", new[] { "Brokk", "Lyra" });
+            // Ultimate beim Ausholen (Zeitstopp) und kurz nach dem Einschlag
+            foreach (int uc in new[] { 0, 2, 3 })
+            {
+                s = GameState.NewMatch(uc, 1, 3, 0, uc == 0 ? 1 : uc == 2 ? 2 : 3); s.phase = GameState.Fight; s.phaseTimer = 0;
+                s.p[0].x = -150; s.p[1].x = uc == 3 ? 350 : 60; s.p[1].facing = -1;
+                s.p[0].ult = Tuning.UltMax; s.p[1].ult = 64;
+                r.ClearFx();
+                int ultFrames = Attacks.SetOf(uc)[Attacks.Ult].Startup;
+                for (int t = 0; t < ultFrames + 4; t++)
+                {
+                    ev.Clear();
+                    Sim.Step(s, new[] { t == 0 ? Btn.Ult : 0, 0 }, new[] { t == 0 ? Btn.Ult : 0, 0 }, ev, false);
+                    foreach (var e in ev) r.OnEvent(e, s);
+                    r.Tick(); r.UpdateCamera(s);
+                    if (t == ultFrames - 8) Shot(r, s, "shot_ult" + uc + "_wind", names);
+                }
+                Shot(r, s, "shot_ult" + uc + "_strike", names);
+            }
             var game = new Game();
             for (int i = 0; i < 5; i++) game.Tick();
             using (var bmp = new Bitmap(1280, 720))
@@ -748,6 +886,11 @@ namespace Sensensturm
             for (int i = 0; i < 3; i++) game.Tick();
             using (var bmp = new Bitmap(1280, 720))
             using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_combos.png"), ImageFormat.Png); }
+            Settings.P1Char = 0; Settings.P2Char = 2; Settings.Opponent = 3;
+            game.DebugComboView();
+            for (int i = 0; i < 3; i++) game.Tick();
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_comboview.png"), ImageFormat.Png); }
         }
     }
 }

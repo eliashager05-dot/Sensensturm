@@ -88,6 +88,10 @@ namespace Sensensturm
         [Desc("Abklingzeit des Verfolgungs-Dodges")] public static int ChaseDodgeCooldown = 24;
         [Desc("Maximale Haltezeit beim Greifen, danach automatischer Wurf")] public static int GrabHoldMax = 40;
         [Desc("Kantenhilfe: so viele Pixel unter der Oberkante wird man auf die Bühne gezogen")] public static float LedgeAssist = 34f;
+        [Desc("Ultimate: benötigte Leistenpunkte")] public static float UltMax = 100f;
+        [Desc("Ultimate: Leistenpunkte pro verursachtem Schadenspunkt")] public static float UltGainDeal = 1f;
+        [Desc("Ultimate: Leistenpunkte pro erlittenem Schadenspunkt")] public static float UltGainTake = 0.6f;
+        [Desc("Ultimate: so viele Frames wird der Gegner beim Auslösen eingefroren (Zeitstopp)")] public static int UltFreeze = 20;
         [Desc("Version dieser Datei (nicht ändern)")] public static int TuningVersion = CurrentVersion;
         public const int CurrentVersion = 2;
         [Desc("Frames bis zum Respawn nach einem KO")] public static int RespawnDelay = 70;
@@ -220,13 +224,13 @@ namespace Sensensturm
             Keys[] a, b;
             if (p == 0)
             {
-                a = new Keys[] { Keys.A, Keys.D, Keys.W, Keys.S, Keys.Space, Keys.J, Keys.K, Keys.L, Keys.H, Keys.E };
-                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.W, Keys.LButton, Keys.MButton, Keys.ShiftKey, Keys.RButton, Keys.None };
+                a = new Keys[] { Keys.A, Keys.D, Keys.W, Keys.S, Keys.Space, Keys.J, Keys.K, Keys.L, Keys.H, Keys.E, Keys.Q };
+                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.W, Keys.LButton, Keys.MButton, Keys.ShiftKey, Keys.RButton, Keys.None, Keys.None };
             }
             else
             {
-                a = new Keys[] { Keys.Left, Keys.Right, Keys.Up, Keys.Down, Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad5, Keys.NumPad4 };
-                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.Up, Keys.OemPeriod, Keys.OemMinus, Keys.End, Keys.PageDown, Keys.Oemcomma };
+                a = new Keys[] { Keys.Left, Keys.Right, Keys.Up, Keys.Down, Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad5, Keys.NumPad4, Keys.NumPad6 };
+                b = new Keys[] { Keys.None, Keys.None, Keys.None, Keys.None, Keys.Up, Keys.OemPeriod, Keys.OemMinus, Keys.End, Keys.PageDown, Keys.Oemcomma, Keys.None };
             }
             for (int i = 0; i < Btn.Count; i++) { Bind[p, i, 0] = a[i]; Bind[p, i, 1] = b[i]; }
         }

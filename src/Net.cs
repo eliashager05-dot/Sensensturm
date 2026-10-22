@@ -15,7 +15,7 @@ namespace Sensensturm
     // (Client-Side Prediction) und gleicht sie mit jedem Snapshot ab (Reconciliation).
     public static class Pk
     {
-        public const byte Version = 6;
+        public const byte Version = 7;
         public const byte Discover = 1, DiscoverReply = 2, Join = 3, Welcome = 4, Reject = 5, Lobby = 6, Input = 7,
             Snapshot = 8, Ping = 9, Pong = 10, Bye = 11, Hello = 12, Punch = 13;
 

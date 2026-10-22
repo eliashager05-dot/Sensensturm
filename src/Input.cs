@@ -7,13 +7,14 @@ namespace Sensensturm
 {
     public static class Btn
     {
-        public const int Left = 1, Right = 2, Up = 4, Down = 8, Jump = 16, Light = 32, Heavy = 64, Dodge = 128, Shield = 256, Grab = 512;
-        public const int Count = 10;
-        public static readonly string[] Ids = { "Left", "Right", "Up", "Down", "Jump", "Light", "Heavy", "Dodge", "Shield", "Grab" };
-        public static readonly string[] Names = { "Links", "Rechts", "Oben / Zielen", "Unten / Schnellfall", "Springen", "Leichter Angriff", "Schwerer Angriff", "Ausweichen / Dash", "Schild / Parieren", "Greifen / Werfen" };
+        public const int Left = 1, Right = 2, Up = 4, Down = 8, Jump = 16, Light = 32, Heavy = 64, Dodge = 128, Shield = 256, Grab = 512, Ult = 1024;
+        public const int Count = 11;
+        public const int UltIndex = 10; // Index der Ultimate-Taste in Ids/Names/Settings.Bind
+        public static readonly string[] Ids = { "Left", "Right", "Up", "Down", "Jump", "Light", "Heavy", "Dodge", "Shield", "Grab", "Ult" };
+        public static readonly string[] Names = { "Links", "Rechts", "Oben / Zielen", "Unten / Schnellfall", "Springen", "Leichter Angriff", "Schwerer Angriff", "Ausweichen / Dash", "Schild / Parieren", "Greifen / Werfen", "Ultimate" };
     }
 
-    public enum MenuKey { Up, Down, Left, Right, Ok, Back, Pause }
+    public enum MenuKey { Up, Down, Left, Right, Ok, Back, Pause, Combos }
 
     // Tastatur + XInput-Controller. Liefert pro Tick gehaltene Tasten und "seit letztem Tick gedrückt" (Latch),
     // damit auch sehr kurze Tastendrücke nicht verloren gehen.
@@ -55,6 +56,7 @@ namespace Sensensturm
                 case Keys.Right: case Keys.D: Menu.Add(MenuKey.Right); break;
                 case Keys.Enter: case Keys.Space: case Keys.J: Menu.Add(MenuKey.Ok); break;
                 case Keys.Escape: Menu.Add(MenuKey.Back); Menu.Add(MenuKey.Pause); break;
+                case Keys.F1: Menu.Add(MenuKey.Combos); break;
             }
         }
 
@@ -102,6 +104,7 @@ namespace Sensensturm
                 if ((g.wButtons & 0x2000) != 0) h |= Btn.Heavy;                                  // B
                 if (g.bRightTrigger > 90 || (g.wButtons & 0x0200) != 0) h |= Btn.Dodge;          // RT, RB
                 if (g.bLeftTrigger > 90 || (g.wButtons & 0x0100) != 0) h |= Btn.Shield;          // LT, LB
+                if ((g.wButtons & 0x0080) != 0) h |= Btn.Ult;                                    // rechten Stick drücken
                 padLatch[i] |= h & ~PadHeld[i];
                 PadHeld[i] = h;
 
@@ -114,6 +117,7 @@ namespace Sensensturm
                 if ((g.wButtons & 0x1000) != 0) mb |= 16;
                 if ((g.wButtons & 0x2000) != 0) mb |= 32; // B
                 if ((g.wButtons & 0x0010) != 0) mb |= 64; // Start
+                if ((g.wButtons & 0x0020) != 0) mb |= 128; // Back
                 ushort e = (ushort)(mb & ~padMenuPrev[i]);
                 if ((e & 1) != 0) Menu.Add(MenuKey.Up);
                 if ((e & 2) != 0) Menu.Add(MenuKey.Down);
@@ -122,6 +126,7 @@ namespace Sensensturm
                 if ((e & 16) != 0) Menu.Add(MenuKey.Ok);
                 if ((e & 32) != 0) Menu.Add(MenuKey.Back);
                 if ((e & 64) != 0) { Menu.Add(MenuKey.Back); Menu.Add(MenuKey.Pause); }
+                if ((e & 128) != 0) Menu.Add(MenuKey.Combos);
                 padMenuPrev[i] = mb;
             }
             if (padRetry <= 0) padRetry = 120;

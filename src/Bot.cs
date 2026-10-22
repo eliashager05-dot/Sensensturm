@@ -73,6 +73,18 @@ namespace Sensensturm
             bool canAct = P.state == St.Idle || P.state == St.Run || P.state == St.Air || P.state == St.Dash || (P.state == St.Attack && P.atkHit);
             if (!canAct) { Finish(h, out held, out pressed); return; }
 
+            // Ultimate, sobald die Leiste voll ist und der Gegner in Reichweite
+            if (P.ult >= Tuning.UltMax && O.invuln == 0 && O.state != St.Respawn)
+            {
+                int w = CharDef.All[P.charId].Weapon;
+                float range = w == Weapon.Bow ? 700 : w == Weapon.Hammer ? 300 : 260;
+                if (adx < range && Math.Abs(dy) < (w == Weapon.Bow ? 70 : 130) && rng.Next(level == 3 ? 2 : 5) == 0)
+                {
+                    Finish(h | toward | Btn.Ult, out held, out pressed);
+                    return;
+                }
+            }
+
             if (adx > 150)
             {
                 h |= toward;

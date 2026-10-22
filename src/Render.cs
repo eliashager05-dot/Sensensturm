@@ -47,6 +47,7 @@ namespace Sensensturm
         readonly List<Ghost> ghosts = new List<Ghost>();
 
         int goTimer;
+        int ultDim; // Zeitstopp-Abdunklung der Ultimate
         int frame;
         Bitmap bg;
         int bgW, bgH, bgStage = -1;
@@ -662,7 +663,7 @@ namespace Sensensturm
         {
             if (P.state != St.Attack || P.atk < 0) return 0;
             AttackDef d = Attacks.Of(P);
-            if (d.ProjKind != 0 || P.atkFrame >= d.Startup) return 0;
+            if ((d.ProjKind != 0 && d.ProjKind != 3) || P.atkFrame >= d.Startup) return 0;
             return Math.Min(1f, 0.3f + 0.7f * P.atkFrame / (float)d.Startup);
         }
 
@@ -871,6 +872,25 @@ namespace Sensensturm
                     using (var p = RPen(c.Glow, 3)) g.DrawArc(p, x - 30, y - 30, 60, 60, 200, 140);
                     if (frame % 3 == 0) Dust(x - P.projDir * 20, y, 2, 20);
                 }
+                else if (P.projKind == 3)
+                {
+                    // Ultimate: riesiger Sternenpfeil mit Lichtschweif
+                    float x = P.projX, y = P.projY, d = P.projDir;
+                    float fl = (float)Math.Sin(frame * 0.7) * 4;
+                    using (var b = new SolidBrush(A(c.Glow, 0.18f))) g.FillEllipse(b, x - 90 - fl, y - 46 - fl, 180 + fl * 2, 92 + fl * 2);
+                    using (var p = RPen(A(c.Glow, 0.35f), 34)) g.DrawLine(p, x - d * 30, y, x - d * 260, y);
+                    using (var p = RPen(A(Color.White, 0.6f), 12)) g.DrawLine(p, x - d * 20, y, x - d * 180, y);
+                    using (var p = RPen(c.Outline, 9)) g.DrawLine(p, x + d * 40, y, x - d * 50, y);
+                    using (var p = RPen(Color.White, 5)) g.DrawLine(p, x + d * 40, y, x - d * 50, y);
+                    using (var b = new SolidBrush(c.Glow))
+                    {
+                        g.FillPolygon(b, new[] { new PointF(x + d * 72, y), new PointF(x + d * 30, y - 20), new PointF(x + d * 38, y), new PointF(x + d * 30, y + 20) });
+                        g.FillPolygon(b, new[] { new PointF(x - d * 46, y), new PointF(x - d * 70, y - 18), new PointF(x - d * 62, y), new PointF(x - d * 70, y + 18) });
+                    }
+                    DrawStar(g, x + d * 40, y, 10 + fl, Color.White);
+                    parts.Add(new Particle { Kind = 0, X = x - d * 30, Y = y + (float)(rng.NextDouble() - 0.5) * 40, VX = -d * 4, VY = (float)(rng.NextDouble() - 0.5) * 3, Life = 16, Max = 16, Size = 3, C = c.Glow, Drag = 0.92f });
+                    if (frame % 2 == 0) parts.Add(new Particle { Kind = 1, X = x, Y = y, Size = 24, Life = 14, Max = 14, C = c.Glow });
+                }
                 else
                 {
                     float len = (float)Math.Sqrt(P.projVx * P.projVx + P.projVy * P.projVy);
@@ -902,7 +922,7 @@ namespace Sensensturm
 
             // Geisterbilder für Dash/Dodge/Wirbel
             bool fast = P.state == St.Dash || P.state == St.AirDodge || P.state == St.Dodge || (P.state == St.Hitstun && P.tumble) ||
-                        (P.state == St.Attack && (P.atk == Attacks.DAirHeavy || P.atk == Attacks.UAirHeavy || P.atk == Attacks.NHeavy) && P.atkFrame >= Attacks.Of(P).Startup);
+                        (P.state == St.Attack && (P.atk == Attacks.DAirHeavy || P.atk == Attacks.UAirHeavy || P.atk == Attacks.NHeavy || P.atk == Attacks.DashAtk || P.atk == Attacks.Ult) && P.atkFrame >= Attacks.Of(P).Startup);
             if (fast && frame % 2 == 0) ghosts.Add(new Ghost { X = wx, Y = wy, Facing = P.facing, Char = P.charId, Life = 12, Pose = pose, Ground = grounded });
 
             // Rankenseil der Bogenschützin
@@ -959,6 +979,20 @@ namespace Sensensturm
                     parts.Add(new Particle { Kind = 0, X = wx + (float)(rng.NextDouble() - 0.5) * 80, Y = wy - 50 + (float)(rng.NextDouble() - 0.5) * 80, VY = -3, Life = 14, Max = 14, Size = 2, C = c.Glow });
             }
 
+            // Ultimate-Aura beim Ausholen
+            if (P.state == St.Attack && P.atk == Attacks.Ult)
+            {
+                AttackDef d = Attacks.Of(P);
+                float t = Math.Min(1f, P.atkFrame / (float)Math.Max(1, d.Startup));
+                bool winding = P.atkFrame < d.Startup;
+                float pul = (float)Math.Sin(frame * 0.45) * 8;
+                float rr = (winding ? 60 + t * 50 : 120) + pul;
+                using (var b = new SolidBrush(A(c.Glow, winding ? 0.18f + 0.22f * t : 0.25f))) g.FillEllipse(b, wx - rr, wy - 55 - rr, rr * 2, rr * 2);
+                using (var p = RPen(A(Color.White, 0.5f + 0.4f * t), 3)) g.DrawEllipse(p, wx - rr * 0.8f, wy - 55 - rr * 0.8f, rr * 1.6f, rr * 1.6f);
+                if (winding && frame % 2 == 0)
+                    parts.Add(new Particle { Kind = 0, X = wx + (float)(rng.NextDouble() - 0.5) * 140, Y = wy + 10, VY = -6 - (float)rng.NextDouble() * 5, Life = 18, Max = 18, Size = 3, C = c.Glow, Drag = 0.97f });
+            }
+
             // Parade-Aura
             if (P.parryFlash > 0)
             {
@@ -968,7 +1002,7 @@ namespace Sensensturm
 
             float alpha = 1f;
             if (P.invuln > 0 && (P.state == St.Dodge || P.state == St.AirDodge)) alpha = 0.55f;
-            else if (P.invuln > 0 && P.state != St.Respawn && frame % 8 < 3) alpha = 0.6f;
+            else if (P.invuln > 0 && P.state != St.Respawn && P.atk != Attacks.Ult && frame % 8 < 3) alpha = 0.6f;
             int mode = P.hurtFlash > 4 ? 1 : 0;
 
             // Umrissleuchten zur besseren Erkennbarkeit
@@ -1303,7 +1337,7 @@ namespace Sensensturm
         {
             parts.Clear(); ghosts.Clear();
             for (int i = 0; i < 2; i++) { trailA[i].Clear(); trailB[i].Clear(); OffX[i] = OffY[i] = 0; }
-            Flash = 0; shake = 0; goTimer = 0;
+            Flash = 0; shake = 0; goTimer = 0; ultDim = 0;
         }
 
         public void OnEvent(GameEvent e, GameState s)
@@ -1460,6 +1494,44 @@ namespace Sensensturm
                         Audio.Play(Sfx.Charge, 0.6f, 1f + Math.Min(1f, e.V * 0.06f));
                         break;
                     }
+                case Ev.Ult:
+                    {
+                        // Zeitstopp: Bild abdunkeln, Name der Ultimate einblenden
+                        ultDim = 60;
+                        Flash = 0.45f; flashColor = c.Glow;
+                        Ring(e.X, e.Y, 260, Color.White, 28);
+                        Ring(e.X, e.Y, 170, c.Glow, 24);
+                        Sparks(e.X, e.Y, 30, c.Glow, 12, 3.5f);
+                        Text(P.x, P.y - 190, Attacks.SetOf(P.charId)[Attacks.Ult].Name.ToUpper() + "!", c.Glow, 80);
+                        AddShake(10);
+                        Audio.Play(Sfx.Ult, 1.1f);
+                        break;
+                    }
+                case Ev.UltStrike:
+                    if (e.V == Weapon.Hammer)
+                    {
+                        // Weltenbrecher: Bebenwellen zu beiden Seiten
+                        parts.Add(new Particle { Kind = 8, X = e.X, Y = e.Y, Size = 420, Life = 26, Max = 26, C = c.Glow });
+                        parts.Add(new Particle { Kind = 8, X = e.X, Y = e.Y, Size = 260, Life = 22, Max = 22, C = Color.White });
+                        for (int k = -3; k <= 3; k++) Dust(e.X + k * 100, e.Y, 4, 60);
+                        Sparks(e.X, e.Y - 10, 30, Color.FromArgb(255, 200, 120), 14, 3.5f);
+                        AddShake(20);
+                        Audio.Play(Sfx.Shock, 1.2f, 0.7f);
+                    }
+                    else if (e.V == Weapon.Scythe)
+                    {
+                        Ring(e.X + P.facing * 120, e.Y - 90, 220, c.Glow, 18);
+                        Sparks(e.X + P.facing * 120, e.Y - 90, 24, Color.White, 12, 3);
+                        AddShake(12);
+                        Audio.Play(Sfx.SwingHeavy, 1.2f, 0.7f);
+                    }
+                    Flash = Math.Max(Flash, 0.25f); flashColor = Color.White;
+                    break;
+                case Ev.UltReady:
+                    Text(e.X, e.Y, "ULTIMATE BEREIT!", c.Glow, 70);
+                    Ring(P.x, P.y - 50, 90, c.Glow, 18);
+                    Audio.Play(Sfx.Charge, 0.8f, 1.3f);
+                    break;
                 case Ev.GameOver:
                     Flash = 0.3f; flashColor = Color.White;
                     break;
@@ -1470,6 +1542,7 @@ namespace Sensensturm
         {
             frame++;
             if (goTimer > 0) goTimer--;
+            if (ultDim > 0) ultDim--;
             if (Flash > 0) Flash = Math.Max(0, Flash - 0.025f);
             shake *= 0.85f;
             if (shake < 0.3f) shake = 0;
@@ -1627,6 +1700,14 @@ namespace Sensensturm
 
             DrawArena(g);
             DrawDecor(g);
+            // Zeitstopp der Ultimate: Welt abdunkeln, nur die Kämpfer bleiben hell
+            if (ultDim > 0)
+            {
+                var smDim = g.SmoothingMode;
+                g.SmoothingMode = SmoothingMode.HighSpeed;
+                using (var b = new SolidBrush(Color.FromArgb((int)(150 * Math.Min(1f, ultDim / 20f)), 4, 0, 12))) g.FillRectangle(b, CamX - 4000, CamY - 3000, 8000, 6000);
+                g.SmoothingMode = smDim;
+            }
             DrawGhosts(g, s.p);
             for (int i = 0; i < 2; i++) DrawTrail(g, s.p[i]);
             // der zuletzt angreifende Spieler wird oben gezeichnet
@@ -1708,6 +1789,9 @@ namespace Sensensturm
             return p;
         }
 
+        // Tastenhinweis für die Ultimate je Spieler (setzt das Spiel, leer = keiner)
+        public string[] UltKeys = { "", "" };
+
         public void DrawHud(Graphics g, GameState s, string[] names)
         {
             for (int i = 0; i < 2; i++)
@@ -1747,9 +1831,31 @@ namespace Sensensturm
                 // Dodge-Abklingzeit
                 if (P.dodgeCd > 0)
                     using (var b = new SolidBrush(Color.FromArgb(150, 200, 200, 220))) g.DrawString("Dodge " + (P.dodgeCd / 60f).ToString("0.0") + "s", FTiny, b, x + 84, y + 64);
+                // Ultimate-Leiste über dem Panel
+                {
+                    float ux = x + 10, uy = y - 20, uw = w - 20, uh = 15;
+                    float u = Math.Max(0, Math.Min(1, P.ult / Tuning.UltMax));
+                    bool full = u >= 1;
+                    float pul = full ? 0.5f + 0.5f * (float)Math.Sin(frame * 0.2) : 0;
+                    using (var path = RoundRect(ux, uy, uw, uh, 6))
+                    {
+                        using (var b = new SolidBrush(Color.FromArgb(185, 14, 8, 26))) g.FillPath(b, path);
+                        if (u > 0.01f)
+                            using (var fill = RoundRect(ux, uy, Math.Max(12, uw * u), uh, 6))
+                            using (var b = new LinearGradientBrush(new RectangleF(ux, uy, uw, uh), Mixc(c.Glow, Color.Black, 0.35f), full ? Mixc(c.Glow, Color.White, 0.3f + 0.4f * pul) : c.Glow, LinearGradientMode.Horizontal))
+                                g.FillPath(b, fill);
+                        using (var p = new Pen(full ? A(Color.White, 0.6f + 0.4f * pul) : A(c.Glow, 0.6f), full ? 2.5f : 1.5f)) g.DrawPath(p, path);
+                    }
+                    if (full)
+                        using (var b = new SolidBrush(A(c.Glow, 0.25f * pul))) g.FillEllipse(b, ux - 10, uy - 12, uw + 20, uh + 24);
+                    string ut = full ? "ULTIMATE BEREIT!" + (UltKeys[i] != "" ? "  [" + UltKeys[i] + "]" : "") : "ULTIMATE  " + (int)(u * 100) + "%";
+                    var usz = g.MeasureString(ut, FTiny);
+                    using (var b = new SolidBrush(Color.FromArgb(200, 0, 0, 0))) g.DrawString(ut, FTiny, b, ux + (uw - usz.Width) / 2 + 1, uy - 1);
+                    using (var b = new SolidBrush(full ? Color.White : Color.FromArgb(225, 235, 230, 245))) g.DrawString(ut, FTiny, b, ux + (uw - usz.Width) / 2, uy - 2);
+                }
                 // Combo
                 if (P.combo >= 2 && P.comboTimer > 0)
-                    Shadowed(g, P.combo + " TREFFER COMBO" + (P.perfects > 0 ? "  (" + P.perfects + " perfekt)" : ""), FMed, Color.FromArgb(Math.Min(255, P.comboTimer * 5), 255, 220, 120), x + (i == 0 ? 0 : w), y - 40, false);
+                    Shadowed(g, P.combo + " TREFFER COMBO" + (P.perfects > 0 ? "  (" + P.perfects + " perfekt)" : ""), FMed, Color.FromArgb(Math.Min(255, P.comboTimer * 5), 255, 220, 120), x + (i == 0 ? 0 : w), y - 60, false);
             }
 
             if (s.timeLeft >= 0)
