@@ -9,8 +9,10 @@ namespace Sensensturm
     class Style
     {
         public Pen Outline, Bone, BoneBack, Thin, ShaftOut, Shaft, Edge, Rim, Spine;
-        public Pen Thick, ThickBack, ThickOut, Crack, Slim, SlimBack, SlimOut, Boot, Scarf, ScarfOut, GlowLine, HeadOut, BowString, Arrow;
+        public Pen Thick, ThickBack, ThickOut, Crack, GlowLine, HeadOut, BowString, Arrow, Fine;
+        public Pen Wrap, WrapBack, WrapOut, LimbOut, Sleeve, SleeveBack, Pants, PantsBack, Leather, LeatherBack, Fold, BladeDark;
         public SolidBrush BoneB, BoneBackB, OutlineB, Socket, EyeGlow, EyeCore, BladeB, ShieldB, RimB, GlowB, SkinB;
+        public SolidBrush EyeRing, ClothB, ClothShadeB, ClothDarkB, LeatherB, LeatherDarkB, HairB, TrimB, Highlight;
         public float Alpha;
     }
 
@@ -90,6 +92,10 @@ namespace Sensensturm
             Color bone = c.Bone, shade = c.Shade, outl = c.Outline, blade = c.Blade, shaft = c.Shaft, face = c.ShieldFace, rim = c.Rim;
             if (mode == 1) { bone = Color.White; shade = Color.FromArgb(235, 235, 245); blade = Color.White; shaft = Color.FromArgb(220, 220, 230); face = Color.FromArgb(240, 240, 250); rim = Color.White; outl = Color.FromArgb(255, 255, 255); }
             if (mode == 2) { bone = c.Glow; shade = c.Glow; outl = A(c.Glow, 0.3f); blade = c.Glow; shaft = c.Glow; face = c.Glow; rim = c.Glow; }
+            // Kleidungsfarben: Trefferblitz hellt auf, Geisterbild färbt alles im Leuchtton
+            Func<Color, Color> M = x => A(mode == 1 ? Mixc(x, Color.White, 0.85f) : mode == 2 ? c.Glow : x, a);
+            Func<Color, Color> D = x => Mixc(x, Color.Black, 0.3f);
+            Color pants = Mixc(c.LeatherDark, c.Outline, 0.55f);
             s = new Style
             {
                 Outline = RPen(A(outl, a), 8f),
@@ -105,7 +111,7 @@ namespace Sensensturm
                 BoneBackB = new SolidBrush(A(shade, a)),
                 OutlineB = new SolidBrush(A(outl, a)),
                 Socket = new SolidBrush(A(Color.FromArgb(14, 4, 22), a)),
-                EyeGlow = new SolidBrush(A(Color.FromArgb(120, c.Glow), a)),
+                EyeGlow = new SolidBrush(A(Color.FromArgb(120, c.EyeAura.A > 0 ? c.EyeAura : c.Glow), a)),
                 EyeCore = new SolidBrush(A(c.Eye, a)),
                 BladeB = new SolidBrush(A(blade, a)),
                 ShieldB = new SolidBrush(A(face, a)),
@@ -114,18 +120,34 @@ namespace Sensensturm
                 ThickBack = RPen(A(shade, a), 11f),
                 ThickOut = RPen(A(outl, a), 15.5f),
                 Crack = RPen(A(mode == 2 ? c.Glow : c.Glow, a * 0.85f), 2f),
-                Slim = RPen(A(bone, a), 4.4f),
-                SlimBack = RPen(A(shade, a), 4.4f),
-                SlimOut = RPen(A(outl, a), 7.4f),
-                Boot = RPen(A(mode == 1 ? Color.White : Color.FromArgb(70, 44, 30), a), 4.8f),
-                Scarf = RPen(A(mode == 0 ? c.Edge : bone, a), 5f),
-                ScarfOut = RPen(A(outl, a), 8f),
                 GlowLine = RPen(A(c.Glow, a), 2f),
                 HeadOut = RPen(A(outl, a), 5f),
-                BowString = RPen(A(Color.FromArgb(230, 235, 245), a * 0.9f), 1.4f),
+                BowString = RPen(A(Color.FromArgb(240, 236, 224), a * 0.9f), 1.4f),
                 Arrow = RPen(A(blade, a), 2.6f),
+                Fine = RPen(A(outl, a), 1.4f),
+                Wrap = RPen(M(c.LeatherDark), 7f),
+                WrapBack = RPen(M(D(c.LeatherDark)), 7f),
+                WrapOut = RPen(A(outl, a), 10f),
+                LimbOut = RPen(A(outl, a), 10.5f),
+                Sleeve = RPen(M(c.ClothDark), 6.5f),
+                SleeveBack = RPen(M(D(c.ClothDark)), 6.5f),
+                Pants = RPen(M(pants), 7f),
+                PantsBack = RPen(M(D(pants)), 7f),
+                Leather = RPen(M(c.LeatherDark), 7.5f),
+                LeatherBack = RPen(M(D(c.LeatherDark)), 7.5f),
+                Fold = RPen(M(D(c.Cloth)), 1.8f),
+                BladeDark = RPen(M(D(c.Blade)), 9f),
                 GlowB = new SolidBrush(A(c.Glow, a)),
                 SkinB = new SolidBrush(A(mode == 0 ? c.Skin : bone, a)),
+                EyeRing = new SolidBrush(A(c.EyeAura.A > 0 ? c.EyeAura : c.Glow, a)),
+                ClothB = new SolidBrush(M(c.Cloth)),
+                ClothShadeB = new SolidBrush(M(D(c.Cloth))),
+                ClothDarkB = new SolidBrush(M(c.ClothDark)),
+                LeatherB = new SolidBrush(M(c.Leather)),
+                LeatherDarkB = new SolidBrush(M(c.LeatherDark)),
+                HairB = new SolidBrush(M(c.Hair)),
+                TrimB = new SolidBrush(M(c.Trim)),
+                Highlight = new SolidBrush(A(Color.White, a * (mode == 2 ? 0 : 0.35f))),
                 Alpha = a,
             };
             styles[key] = s;
@@ -204,62 +226,115 @@ namespace Sensensturm
             g.TranslateTransform(c.X, c.Y);
             g.RotateTransform(ang);
             if (scale != 1) g.ScaleTransform(scale, scale);
-            // Schädel
-            g.FillEllipse(st.OutlineB, -14, -15.5f, 28.5f, 26.5f);
-            g.FillEllipse(st.BoneB, -12, -13.5f, 24.5f, 22.5f);
-            // Kiefer
-            g.FillRectangle(st.OutlineB, -3.5f, 3.5f, 16, 10.5f);
-            g.FillRectangle(st.BoneB, -2f, 5f, 13, 7.5f);
-            for (int t = 0; t < 4; t++) g.DrawLine(st.Thin, 0f + t * 3.2f, 7.4f, 0f + t * 3.2f, 11.5f);
-            // Augenhöhlen
-            g.FillEllipse(st.Socket, 2.5f, -6, 8.5f, 9);
-            g.FillEllipse(st.Socket, -5.5f, -5.5f, 6.5f, 8.5f);
+            // Umriss von Schädeldecke und Kiefer
+            g.FillEllipse(st.OutlineB, -16, -18.5f, 32, 29.5f);
+            using (var jaw = RoundRect(-3.5f, -2.5f, 20, 17, 5.5f)) g.FillPath(st.OutlineB, jaw);
+            // Schädel mit Schatten am Hinterkopf
+            g.FillEllipse(st.BoneBackB, -13.5f, -16, 27, 25);
+            g.FillEllipse(st.BoneB, -11.5f, -16.5f, 25.5f, 23);
+            using (var jaw = RoundRect(-1, 0, 15, 12, 4)) g.FillPath(st.BoneB, jaw);
+            g.FillEllipse(st.Highlight, -6, -14.5f, 11, 5);
+            // Riss in der Schädeldecke
+            g.DrawLines(st.Fine, new[] { new PointF(-7, -15.5f), new PointF(-4, -11), new PointF(-6.5f, -7.5f) });
+            // Zähne
+            g.DrawLine(st.Fine, 0.5f, 7.5f, 13.5f, 7.5f);
+            for (int t = 0; t < 4; t++) g.DrawLine(st.Fine, 2.6f + t * 3.2f, 4.8f, 2.6f + t * 3.2f, 10.5f);
+            // Augenhöhlen, oben schräg abgeschnitten (grimmiger Blick)
+            g.FillEllipse(st.Socket, 2, -8, 10.5f, 10);
+            g.FillEllipse(st.Socket, -6, -7, 7, 9);
+            g.FillPolygon(st.BoneB, new[] { new PointF(1, -11), new PointF(14, -11), new PointF(14, -4.6f), new PointF(1, -8.6f) });
+            g.FillPolygon(st.BoneB, new[] { new PointF(-7, -10), new PointF(1.5f, -10), new PointF(1.5f, -5.2f), new PointF(-7, -7.6f) });
+            g.DrawLine(st.Fine, 2, -8.4f, 13, -5);
+            g.DrawLine(st.Fine, -5.5f, -7.4f, 1, -5.4f);
             // Nase
-            g.FillPolygon(st.Socket, new[] { new PointF(10, 1), new PointF(12.5f, 5), new PointF(8.5f, 5) });
+            g.FillPolygon(st.Socket, new[] { new PointF(10.6f, 0.2f), new PointF(12.8f, 4f), new PointF(8.8f, 4f) });
             // Leuchtende Augen
             if (eyeGlow > 0)
             {
                 var gb = st.EyeGlow;
-                float r1 = 6.5f + eyeGlow * 2.5f;
-                g.FillEllipse(gb, 6.7f - r1, -1.5f - r1, r1 * 2, r1 * 2);
-                g.FillEllipse(gb, -2.3f - r1 * 0.75f, -1.2f - r1 * 0.75f, r1 * 1.5f, r1 * 1.5f);
+                float r1 = 5.5f + eyeGlow * 2.5f;
+                g.FillEllipse(gb, 7.4f - r1, -3f - r1, r1 * 2, r1 * 2);
+                g.FillEllipse(gb, -2.5f - r1 * 0.7f, -2.8f - r1 * 0.7f, r1 * 1.4f, r1 * 1.4f);
             }
             if (dizzy)
             {
-                g.DrawArc(st.Rim, 3.5f, -5, 6, 6, 0, 300);
-                g.DrawArc(st.Rim, -5, -4.5f, 5, 5, 0, 300);
+                g.DrawArc(st.Rim, 4.5f, -6, 6, 6, 0, 300);
+                g.DrawArc(st.Rim, -5, -5.5f, 5, 5, 0, 300);
             }
             else
             {
-                g.FillEllipse(st.EyeCore, 4.6f, -3.6f, 4.4f, 4.6f);
-                g.FillEllipse(st.EyeCore, -3.8f, -3.2f, 3.4f, 4f);
+                g.FillEllipse(st.EyeRing, 4.4f, -5.6f, 6.2f, 5.4f);
+                g.FillEllipse(st.EyeCore, 5.6f, -4.8f, 3.8f, 3.4f);
+                g.FillEllipse(st.EyeRing, -4, -4.8f, 4.2f, 4.4f);
+                g.FillEllipse(st.EyeCore, -3.2f, -4.1f, 2.6f, 2.8f);
             }
             g.Restore(gs);
         }
 
+        static PointF Bez(PointF p0, PointF p1, PointF p2, PointF p3, float t)
+        {
+            float u = 1 - t;
+            float a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+            return new PointF(a * p0.X + b * p1.X + c * p2.X + d * p3.X, a * p0.Y + b * p1.Y + c * p2.Y + d * p3.Y);
+        }
+
+        static PointF Norm(PointF v)
+        {
+            float l = (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
+            return l < 0.001f ? new PointF(0, 0) : new PointF(v.X / l, v.Y / l);
+        }
+
         void DrawScythe(Graphics g, Style st, Rig r, CharDef c, bool glow, float alpha)
         {
+            // Schaft aus dunklem Holz mit Lederwicklung
             g.DrawLine(st.ShaftOut, r.Butt, r.Top);
             g.DrawLine(st.Shaft, r.Butt, r.Top);
-            // Klinge
+            PointF ax = Norm(new PointF(r.Top.X - r.Butt.X, r.Top.Y - r.Butt.Y)), pr = new PointF(-ax.Y * 3.4f, ax.X * 3.4f);
+            foreach (float t in new[] { 0.06f, 0.14f, 0.52f, 0.6f })
+            {
+                PointF q = Lp(r.Butt, r.Top, t);
+                g.DrawLine(st.Fine, q.X - pr.X, q.Y - pr.Y, q.X + pr.X + ax.X * 2, q.Y + pr.Y + ax.Y * 2);
+            }
+            // Klinge aus altem Eisen
             using (var path = new GraphicsPath())
             {
                 path.AddBezier(r.Top, r.BladeA, r.BladeB, r.Tip);
                 path.AddBezier(r.Tip, r.InA, r.InB, Lp(r.Top, r.Butt, 0.08f));
                 path.CloseFigure();
                 if (glow)
-                    using (var gp = RPen(A(c.Edge, 0.45f * alpha), 9f)) g.DrawPath(gp, path);
+                    using (var gp = RPen(A(c.Glow, 0.5f * alpha), 11f)) g.DrawPath(gp, path);
+                g.DrawPath(st.HeadOut, path);
                 g.FillPath(st.BladeB, path);
-                g.DrawPath(st.Thin, path);
+                // dunkle Patina am Klingenrücken
+                var clip = g.Save();
+                g.SetClip(path, CombineMode.Intersect);
+                using (var back = new GraphicsPath())
+                {
+                    back.AddBezier(r.Top, r.BladeA, r.BladeB, r.Tip);
+                    g.DrawPath(st.BladeDark, back);
+                }
+                g.Restore(clip);
             }
+            // Schneide mit Scharten
             using (var edge = new GraphicsPath())
             {
                 edge.AddBezier(r.Tip, r.InA, r.InB, r.Top);
                 g.DrawPath(st.Edge, edge);
             }
-            // Zierring am Kopf der Sense
-            g.FillEllipse(st.OutlineB, r.Top.X - 4.5f, r.Top.Y - 4.5f, 9, 9);
-            g.FillEllipse(st.RimB, r.Top.X - 3, r.Top.Y - 3, 6, 6);
+            foreach (float t in new[] { 0.3f, 0.55f, 0.78f })
+            {
+                PointF q = Bez(r.Tip, r.InA, r.InB, r.Top, t);
+                PointF tn = Norm(new PointF(Bez(r.Tip, r.InA, r.InB, r.Top, t + 0.02f).X - q.X, Bez(r.Tip, r.InA, r.InB, r.Top, t + 0.02f).Y - q.Y));
+                PointF o = Bez(r.Top, r.BladeA, r.BladeB, r.Tip, 1 - t);
+                PointF into = Norm(new PointF(o.X - q.X, o.Y - q.Y));
+                g.FillPolygon(st.OutlineB, new[]
+                {
+                    new PointF(q.X - tn.X * 2.6f, q.Y - tn.Y * 2.6f), new PointF(q.X + into.X * 4.2f, q.Y + into.Y * 4.2f), new PointF(q.X + tn.X * 2.6f, q.Y + tn.Y * 2.6f)
+                });
+            }
+            // Eisenmanschette am Kopf der Sense
+            g.FillEllipse(st.OutlineB, r.Top.X - 5, r.Top.Y - 5, 10, 10);
+            g.FillEllipse(st.RimB, r.Top.X - 3.4f, r.Top.Y - 3.4f, 6.8f, 6.8f);
         }
 
         // Gliedmaßen je Körpertyp
@@ -290,37 +365,67 @@ namespace Sensensturm
             }
             if (body == Body.Huntress)
             {
-                g.DrawLines(st.SlimOut, pts);
-                g.DrawLines(back ? st.SlimBack : st.Slim, pts);
+                // Arm: grüner Ärmel, Lederarmschiene, Hand im fingerlosen Handschuh
+                // Bein: dunkle Hose, Knieschoner, hohe Lederstiefel mit Stulpe
+                PointF s0 = leg ? Lp(b, c, 0.38f) : Lp(b, c, 0.22f);
+                g.DrawLines(st.LimbOut, pts);
+                if (leg) g.DrawLine(st.LimbOut, c, new PointF(c.X + 9, c.Y));
+                g.DrawLines(leg ? (back ? st.PantsBack : st.Pants) : (back ? st.SleeveBack : st.Sleeve), pts);
+                g.DrawLine(back ? st.LeatherBack : st.Leather, s0, c);
+                g.DrawLine(st.Fine, Lp(s0, c, 0.5f).X - 3.5f, Lp(s0, c, 0.5f).Y - 1, Lp(s0, c, 0.5f).X + 3.5f, Lp(s0, c, 0.5f).Y + 1);
                 if (leg)
                 {
-                    g.DrawLine(st.Boot, Lp(b, c, 0.45f), c);
-                    var toe = new PointF(c.X + 8, c.Y);
-                    g.DrawLine(st.SlimOut, c, toe);
-                    g.DrawLine(st.Boot, c, toe);
+                    g.DrawLine(back ? st.LeatherBack : st.Leather, c, new PointF(c.X + 9, c.Y));
+                    // Stiefelstulpe
+                    PointF dd = Norm(new PointF(c.X - b.X, c.Y - b.Y)), pp = new PointF(-dd.Y * 5.2f, dd.X * 5.2f);
+                    g.FillPolygon(st.OutlineB, new[] { new PointF(s0.X - pp.X - dd.X, s0.Y - pp.Y - dd.Y), new PointF(s0.X + pp.X - dd.X, s0.Y + pp.Y - dd.Y), new PointF(s0.X + pp.X * 0.9f + dd.X * 5, s0.Y + pp.Y * 0.9f + dd.Y * 5), new PointF(s0.X - pp.X * 0.9f + dd.X * 5, s0.Y - pp.Y * 0.9f + dd.Y * 5) });
+                    g.FillPolygon(st.LeatherB, new[] { new PointF(s0.X - pp.X * 0.75f, s0.Y - pp.Y * 0.75f), new PointF(s0.X + pp.X * 0.75f, s0.Y + pp.Y * 0.75f), new PointF(s0.X + pp.X * 0.65f + dd.X * 3.8f, s0.Y + pp.Y * 0.65f + dd.Y * 3.8f), new PointF(s0.X - pp.X * 0.65f + dd.X * 3.8f, s0.Y - pp.Y * 0.65f + dd.Y * 3.8f) });
+                    // Knieschoner
+                    var kp = new[] { new PointF(b.X, b.Y - 5.5f), new PointF(b.X + 5, b.Y), new PointF(b.X, b.Y + 5.5f), new PointF(b.X - 5, b.Y) };
+                    g.DrawPolygon(st.HeadOut, kp);
+                    g.FillPolygon(back ? st.LeatherDarkB : st.LeatherB, kp);
                 }
                 else
                 {
-                    g.FillEllipse(st.OutlineB, c.X - 4.2f, c.Y - 4.2f, 8.4f, 8.4f);
-                    g.FillEllipse(st.SkinB, c.X - 3f, c.Y - 3f, 6f, 6f);
+                    g.FillEllipse(st.OutlineB, c.X - 4.8f, c.Y - 4.8f, 9.6f, 9.6f);
+                    g.FillEllipse(st.SkinB, c.X - 3.4f, c.Y - 3.4f, 6.8f, 6.8f);
+                    g.FillPie(st.LeatherDarkB, c.X - 3.4f, c.Y - 3.4f, 6.8f, 6.8f, 120, 180);
                 }
                 return;
             }
+            // Skelett: Knochen, dunkle Stoffwickel um Unterarme und Schienbeine
             g.DrawLines(st.Outline, pts);
             g.DrawLines(back ? st.BoneBack : st.Bone, pts);
             SolidBrush kb = back ? st.BoneBackB : st.BoneB;
-            g.FillEllipse(st.OutlineB, b.X - 4.2f, b.Y - 4.2f, 8.4f, 8.4f);
-            g.FillEllipse(kb, b.X - 3f, b.Y - 3f, 6f, 6f);
             if (leg)
             {
-                PointF toe = new PointF(c.X + 8, c.Y + 0.5f);
+                PointF toe = new PointF(c.X + 9, c.Y + 0.5f);
                 g.DrawLine(st.Outline, c, toe);
                 g.DrawLine(back ? st.BoneBack : st.Bone, c, toe);
             }
-            else
+            PointF w0 = Lp(b, c, leg ? 0.32f : 0.42f), w1 = leg ? new PointF(c.X + 3.5f, c.Y) : Lp(b, c, 0.86f);
+            g.DrawLine(st.WrapOut, w0, w1);
+            g.DrawLine(back ? st.WrapBack : st.Wrap, w0, w1);
+            PointF wd = Norm(new PointF(w1.X - w0.X, w1.Y - w0.Y)), wp = new PointF(-wd.Y * 3.6f, wd.X * 3.6f);
+            for (int k = 1; k < 4; k++)
             {
-                g.FillEllipse(st.OutlineB, c.X - 4.6f, c.Y - 4.6f, 9.2f, 9.2f);
-                g.FillEllipse(kb, c.X - 3.3f, c.Y - 3.3f, 6.6f, 6.6f);
+                PointF q = Lp(w0, w1, k / 4f);
+                g.DrawLine(st.Fine, q.X - wp.X - wd.X * 1.5f, q.Y - wp.Y - wd.Y * 1.5f, q.X + wp.X + wd.X * 1.5f, q.Y + wp.Y + wd.Y * 1.5f);
+            }
+            g.FillEllipse(st.OutlineB, b.X - 4.8f, b.Y - 4.8f, 9.6f, 9.6f);
+            g.FillEllipse(kb, b.X - 3.4f, b.Y - 3.4f, 6.8f, 6.8f);
+            if (!leg)
+            {
+                // Knochenhand mit Krallen
+                PointF hd = Norm(new PointF(c.X - b.X, c.Y - b.Y));
+                for (int k = -1; k <= 1; k++)
+                {
+                    PointF fdir = Norm(new PointF(hd.X - hd.Y * k * 0.5f, hd.Y + hd.X * k * 0.5f));
+                    PointF f = new PointF(c.X + fdir.X * 6.5f, c.Y + fdir.Y * 6.5f);
+                    g.DrawLine(st.Thin, c, f);
+                }
+                g.FillEllipse(st.OutlineB, c.X - 4.8f, c.Y - 4.8f, 9.6f, 9.6f);
+                g.FillEllipse(kb, c.X - 3.5f, c.Y - 3.5f, 7f, 7f);
             }
         }
 
@@ -344,50 +449,150 @@ namespace Sensensturm
             }
             else if (body == Body.Huntress)
             {
-                var tunic = new[] { new PointF(-9, -35), new PointF(10, -35), new PointF(14, 3), new PointF(-12, 3) };
-                g.DrawPolygon(st.Thin, tunic);
-                g.FillPolygon(st.BoneB, tunic);
-                g.DrawLine(st.Rim, -11, -8, 13, -8);
-                g.FillRectangle(st.RimB, -1, -10.5f, 5, 5);
-                g.DrawLine(st.GlowLine, 2, -34, 4, -12);
+                // Köcher mit Pfeilen auf dem Rücken
+                var q = g.Save();
+                g.TranslateTransform(-10, -22);
+                g.RotateTransform(-24);
+                for (int k = 0; k < 3; k++)
+                {
+                    float x = -3 + k * 3;
+                    g.DrawLine(st.HeadOut, x, -12, x - 0.5f, -24 + k);
+                    g.DrawLine(st.Arrow, x, -12, x - 0.5f, -24 + k);
+                    var fl = new[] { new PointF(x - 0.5f, -24 + k), new PointF(x - 3.2f, -29 + k), new PointF(x - 0.5f, -31 + k), new PointF(x + 2.2f, -29 + k) };
+                    g.DrawPolygon(st.Fine, fl);
+                    g.FillPolygon(st.EyeCore, fl);
+                }
+                using (var path = RoundRect(-5.5f, -15, 11, 30, 3.5f)) { g.DrawPath(st.HeadOut, path); g.FillPath(st.LeatherDarkB, path); }
+                g.FillRectangle(st.TrimB, -5.5f, -15, 11, 3.2f);
+                g.FillRectangle(st.TrimB, -5.5f, 8, 11, 2.4f);
+                g.Restore(q);
+                // Untergewand
+                var tunic = new[] { new PointF(-9, -35), new PointF(10, -35), new PointF(13, 4), new PointF(-12, 4) };
+                g.DrawPolygon(st.HeadOut, tunic);
+                g.FillPolygon(st.ClothDarkB, tunic);
+                // Lederweste mit Naht und Rautenmuster
+                var vest = new[] { new PointF(-8, -31), new PointF(9.5f, -31), new PointF(11.5f, -7), new PointF(-9.5f, -7) };
+                g.FillPolygon(st.LeatherB, vest);
+                g.DrawPolygon(st.Fine, vest);
+                g.DrawLine(st.Fine, 3, -30, 3.5f, -8);
+                g.FillPolygon(st.LeatherDarkB, new[] { new PointF(3.2f, -25), new PointF(6, -21), new PointF(3.2f, -17), new PointF(0.4f, -21) });
+                // Schulterkragen
+                var col = new[] { new PointF(-11, -38), new PointF(11, -37), new PointF(9, -29), new PointF(2, -27), new PointF(-9, -30) };
+                g.DrawPolygon(st.HeadOut, col);
+                g.FillPolygon(st.ClothB, col);
+                // Gürtel mit goldener Schnalle
+                g.FillRectangle(st.OutlineB, -12.5f, -9.5f, 26, 7);
+                g.FillRectangle(st.LeatherDarkB, -11.5f, -8.5f, 24, 5);
+                g.FillEllipse(st.OutlineB, 1, -10.5f, 9, 9);
+                g.FillEllipse(st.TrimB, 2.2f, -9.3f, 6.6f, 6.6f);
+                // Rockschöße
+                foreach (var tab in new[]
+                {
+                    new[] { new PointF(-12, -2.5f), new PointF(-4, -2.5f), new PointF(-5.5f, 9), new PointF(-12.5f, 6.5f) },
+                    new[] { new PointF(-3, -2.5f), new PointF(5, -2.5f), new PointF(4.5f, 10), new PointF(-2.5f, 10) },
+                    new[] { new PointF(6, -2.5f), new PointF(13.5f, -2.5f), new PointF(15, 7), new PointF(8, 8.5f) },
+                })
+                {
+                    g.DrawPolygon(st.HeadOut, tab);
+                    g.FillPolygon(st.ClothB, tab);
+                }
             }
             else
             {
-                g.FillEllipse(st.OutlineB, -12, -6, 24, 13);
-                g.FillEllipse(st.BoneB, -10, -4.5f, 20, 9.5f);
-                g.FillEllipse(st.OutlineB, -3, -2, 6, 4);
-                g.DrawLine(st.Outline, 0, -2, 0, -34);
-                g.DrawLine(st.Spine, 0, -2, 0, -34);
+                // Becken
+                g.FillEllipse(st.OutlineB, -13, -7, 26, 14);
+                g.FillEllipse(st.BoneB, -11, -5.5f, 22, 11);
+                // Wirbelsäule und Rippen
+                g.DrawLine(st.Outline, 0, -2, -1, -36);
+                g.DrawLine(st.Spine, 0, -2, -1, -36);
                 for (int k = 0; k < 4; k++)
                 {
-                    float y = -14 - k * 5.2f;
-                    float w = 15 - Math.Abs(k - 1.5f) * 2.2f;
-                    g.DrawArc(st.Thin, -w * 0.55f, y - 4.5f, w * 1.65f, 10, 200, 150);
-                    g.DrawArc(st.Outline, -w * 0.4f, y - 4, w * 1.45f, 9, 210, 140);
-                    g.DrawArc(st.Bone, -w * 0.4f, y - 4, w * 1.45f, 9, 210, 140);
+                    float y = -14 - k * 5.4f;
+                    float w = 16 - Math.Abs(k - 1.5f) * 2.4f;
+                    g.DrawArc(st.Outline, -w * 0.45f, y - 4, w * 1.5f, 9.5f, 205, 145);
+                    g.DrawArc(st.Bone, -w * 0.45f, y - 4, w * 1.5f, 9.5f, 205, 145);
                 }
-                g.DrawLine(st.Outline, -6, -33, 8, -31);
-                g.DrawLine(st.Bone, -6, -33, 8, -31);
+                // Gürtel mit Schädelschnalle
+                g.FillRectangle(st.OutlineB, -14, -6.5f, 29, 7.5f);
+                g.FillRectangle(st.LeatherB, -13, -5.5f, 27, 5.5f);
+                g.FillEllipse(st.OutlineB, 1, -8.5f, 11, 11);
+                g.FillEllipse(st.BoneB, 2.2f, -7.3f, 8.6f, 8.6f);
+                g.FillEllipse(st.Socket, 3.6f, -5.2f, 2.4f, 2.6f);
+                g.FillEllipse(st.Socket, 6.8f, -5.2f, 2.4f, 2.6f);
             }
             g.Restore(gs);
         }
 
-        void DrawScarf(Graphics g, Style st, Rig r, PlayerState P)
+        // zerfetzter Umhang um die Schultern des Skeletts
+        void DrawShawl(Graphics g, Style st, Rig r, Pose p, PlayerState P)
         {
-            float wv = (float)Math.Sin(frame * 0.25 + P.slot) * 4;
-            float len = 24 + Math.Min(30, Math.Abs(P.vx) * 2.5f + Math.Abs(P.vy) * 1.2f);
-            PointF n = new PointF(r.Chest.X - 2, r.Chest.Y + 2);
+            float wv = (float)Math.Sin(frame * 0.22 + P.slot) * 2.5f;
+            float len = 10 + Math.Min(26, Math.Abs(P.vx) * 2.2f + Math.Abs(P.vy));
+            var gs = g.Save();
+            g.TranslateTransform(r.Chest.X, r.Chest.Y);
+            g.RotateTransform(p.Lean);
+            var tail = new[]
+            {
+                new PointF(-6, -6), new PointF(-14 - len, 1 + wv), new PointF(-10 - len * 0.75f, 4 + wv), new PointF(-15 - len * 0.6f, 10 - wv),
+                new PointF(-8 - len * 0.3f, 9), new PointF(-9, 14 - wv), new PointF(-4, 6)
+            };
+            g.DrawPolygon(st.HeadOut, tail);
+            g.FillPolygon(st.ClothShadeB, tail);
+            var col = new[]
+            {
+                new PointF(-12, -6), new PointF(-4, -10), new PointF(6, -9.5f), new PointF(12.5f, -4), new PointF(12.5f, 4), new PointF(10, 12),
+                new PointF(7, 7.5f), new PointF(4, 15), new PointF(0.5f, 8.5f), new PointF(-3.5f, 14), new PointF(-6, 6.5f), new PointF(-11, 9), new PointF(-13, 1)
+            };
+            g.DrawPolygon(st.HeadOut, col);
+            g.FillPolygon(st.ClothB, col);
+            g.DrawLine(st.Fold, 2, -6, 3.5f, 6);
+            g.DrawLine(st.Fold, 8, -4, 9, 5);
+            g.DrawLine(st.Fold, -5, -5, -4.5f, 4);
+            g.Restore(gs);
+        }
+
+        // zerfetztes Lendentuch (hinten dunkler, vorne über den Oberschenkeln)
+        void DrawLoincloth(Graphics g, Style st, Rig r, Pose p, PlayerState P, bool front)
+        {
+            float sw = Math.Max(-9, Math.Min(9, -P.vx * P.facing * 0.9f)) + (float)Math.Sin(frame * 0.2 + P.slot) * 1.5f;
+            var gs = g.Save();
+            g.TranslateTransform(r.Pel.X, r.Pel.Y);
+            g.RotateTransform(p.Lean);
+            PointF[] pts = front
+                ? new[] { new PointF(-3, 0), new PointF(10, 0), new PointF(10 + sw, 15), new PointF(7 + sw, 12), new PointF(4.5f + sw, 18), new PointF(1.5f + sw, 12.5f), new PointF(-1 + sw, 16), new PointF(-4 + sw * 0.6f, 9) }
+                : new[] { new PointF(-13, -1), new PointF(-1, 0), new PointF(-2 + sw * 1.3f, 17), new PointF(-6 + sw * 1.3f, 13), new PointF(-9.5f + sw * 1.3f, 19), new PointF(-12 + sw, 12), new PointF(-15 + sw, 14) };
+            g.DrawPolygon(st.HeadOut, pts);
+            g.FillPolygon(front ? st.ClothDarkB : st.LeatherDarkB, pts);
+            if (front) g.DrawLine(st.Fine, 3.5f + sw * 0.3f, 3, 4.5f + sw * 0.8f, 11);
+            g.Restore(gs);
+        }
+
+        // grüner Umhang der Jägerin
+        void DrawCape(Graphics g, Style st, Rig r, PlayerState P)
+        {
+            float wv = (float)Math.Sin(frame * 0.2 + P.slot) * 3;
+            float len = 6 + Math.Min(32, Math.Abs(P.vx) * 2.6f + Math.Abs(P.vy) * 1.2f);
+            PointF n = r.Chest;
+            float bot = 44 - len * 0.45f;
             using (var path = new GraphicsPath())
             {
-                path.AddBezier(n, new PointF(n.X - 8, n.Y), new PointF(n.X - len * 0.55f, n.Y + 4 + wv), new PointF(n.X - len, n.Y + 9 - wv));
-                g.DrawPath(st.ScarfOut, path);
-                g.DrawPath(st.Scarf, path);
-            }
-            using (var path = new GraphicsPath())
-            {
-                path.AddBezier(n, new PointF(n.X - 6, n.Y + 4), new PointF(n.X - len * 0.4f, n.Y + 10 - wv), new PointF(n.X - len * 0.75f, n.Y + 16 + wv));
-                g.DrawPath(st.ScarfOut, path);
-                g.DrawPath(st.Scarf, path);
+                path.AddLine(new PointF(n.X + 3, n.Y - 3), new PointF(n.X - 8, n.Y - 2));
+                path.AddBezier(new PointF(n.X - 8, n.Y - 2), new PointF(n.X - 16, n.Y + 8), new PointF(n.X - 14 - len * 0.5f, n.Y + bot * 0.6f), new PointF(n.X - 14 - len * 0.7f, n.Y + bot + wv));
+                path.AddLine(new PointF(n.X - 14 - len * 0.7f, n.Y + bot + wv), new PointF(n.X - 8 - len * 0.5f, n.Y + bot - 5 - wv));
+                path.AddLine(new PointF(n.X - 8 - len * 0.5f, n.Y + bot - 5 - wv), new PointF(n.X - 4 - len * 0.3f, n.Y + bot + 2 + wv * 0.5f));
+                path.AddLine(new PointF(n.X - 4 - len * 0.3f, n.Y + bot + 2 + wv * 0.5f), new PointF(n.X + 1 - len * 0.1f, n.Y + bot - 6));
+                path.AddBezier(new PointF(n.X + 1 - len * 0.1f, n.Y + bot - 6), new PointF(n.X + 2, n.Y + 22), new PointF(n.X + 4, n.Y + 6), new PointF(n.X + 3, n.Y - 3));
+                path.CloseFigure();
+                g.DrawPath(st.HeadOut, path);
+                g.FillPath(st.ClothShadeB, path);
+                var clip = g.Save();
+                g.SetClip(path, CombineMode.Intersect);
+                using (var inner = new GraphicsPath())
+                {
+                    inner.AddBezier(new PointF(n.X - 8, n.Y - 2), new PointF(n.X - 16, n.Y + 8), new PointF(n.X - 14 - len * 0.5f, n.Y + bot * 0.6f), new PointF(n.X - 14 - len * 0.7f, n.Y + bot + wv));
+                    using (var pen = RPen(((SolidBrush)st.ClothB).Color, 9)) g.DrawPath(pen, inner);
+                }
+                g.Restore(clip);
             }
         }
 
@@ -413,20 +618,41 @@ namespace Sensensturm
             }
             else
             {
-                // Kapuze mit Fuchsohren
-                g.FillPolygon(st.OutlineB, new[] { new PointF(-11, -8), new PointF(-8, -27), new PointF(1, -11) });
-                g.FillPolygon(st.OutlineB, new[] { new PointF(-1, -11), new PointF(6, -28), new PointF(11, -8) });
-                g.FillPolygon(st.BoneBackB, new[] { new PointF(-9, -9), new PointF(-7.3f, -23), new PointF(-0.5f, -11) });
-                g.FillPolygon(st.BoneBackB, new[] { new PointF(0.5f, -11), new PointF(5.6f, -24), new PointF(9, -9) });
-                g.FillPolygon(st.GlowB, new[] { new PointF(-6.5f, -12), new PointF(-6.5f, -19), new PointF(-2.5f, -12) });
-                g.FillPolygon(st.GlowB, new[] { new PointF(2.5f, -12), new PointF(5.2f, -20), new PointF(6.5f, -12) });
-                g.FillEllipse(st.OutlineB, -14, -14, 28, 27);
-                g.FillEllipse(st.BoneBackB, -12, -12, 24, 23);
-                g.FillEllipse(st.SkinB, -3, -8, 16, 17);
-                g.FillPolygon(st.BoneBackB, new[] { new PointF(-3, -9), new PointF(12, -9), new PointF(3, -2) });
-                if (eyeGlow > 0) g.FillEllipse(st.EyeGlow, 3, -5, 12, 10);
-                if (dizzy) g.DrawArc(st.Rim, 5, -4, 5, 5, 0, 300);
-                else { g.FillEllipse(st.Socket, 6.5f, -2.5f, 3.6f, 4.4f); g.FillEllipse(st.EyeCore, 7.3f, -2, 1.6f, 1.8f); }
+                // Spitze Kapuze
+                using (var hood = new GraphicsPath())
+                {
+                    hood.AddPolygon(new[]
+                    {
+                        new PointF(14, -5), new PointF(11, -14), new PointF(2, -19.5f), new PointF(-8, -18.5f), new PointF(-22, -25),
+                        new PointF(-16, -10), new PointF(-16, 2), new PointF(-11, 12), new PointF(0, 15), new PointF(10, 12)
+                    });
+                    g.DrawPath(st.HeadOut, hood);
+                    g.FillPath(st.ClothB, hood);
+                }
+                g.FillPolygon(st.ClothShadeB, new[] { new PointF(-8, -18.5f), new PointF(-22, -25), new PointF(-16, -10), new PointF(-16, 2), new PointF(-11, 12), new PointF(-6, 2), new PointF(-7, -10) });
+                g.DrawLine(st.Fold, -7, -12, -13, -18);
+                // Gesicht
+                g.FillEllipse(st.ClothDarkB, -3.5f, -11, 19, 23);
+                g.FillEllipse(st.OutlineB, -1.5f, -9.5f, 17, 20.5f);
+                g.FillEllipse(st.SkinB, -0.3f, -8.3f, 14.8f, 18.2f);
+                // Haare (Pony)
+                g.FillPolygon(st.HairB, new[]
+                {
+                    new PointF(-1, -9.5f), new PointF(14, -8), new PointF(14.5f, -3), new PointF(11.5f, -5.5f), new PointF(9.5f, -1),
+                    new PointF(7, -5.5f), new PointF(4, 0), new PointF(2, -5), new PointF(-1, 2)
+                });
+                g.FillPolygon(st.ClothB, new[] { new PointF(-3, -12), new PointF(13, -11), new PointF(15, -7.5f), new PointF(-2, -8) });
+                g.DrawLine(st.Fine, -2, -8, 15, -7.5f);
+                if (dizzy) g.DrawArc(st.Rim, 6, -3, 5, 5, 0, 300);
+                else
+                {
+                    // entschlossener Blick
+                    g.FillEllipse(st.EyeCore, 5.4f, -3.2f, 5.6f, 5.6f);
+                    g.FillEllipse(st.OutlineB, 7.2f, -3f, 3.4f, 5);
+                    g.FillEllipse(st.EyeCore, 8.4f, -2.4f, 1.3f, 1.3f);
+                    g.DrawLine(st.Thin, 5, -5.2f, 11.5f, -3.6f);
+                }
+                g.DrawLine(st.Fine, 9.6f, 6.2f, 12.4f, 5.6f);
             }
             g.Restore(gs);
         }
@@ -461,28 +687,42 @@ namespace Sensensturm
                 g.FillEllipse(st.GlowB, top.X - 4, top.Y - 4, 8, 8);
                 return;
             }
-            // Bogen
+            // Recurve-Bogen aus Holz mit goldenen Beschlägen
             float pull = BowPull(P);
-            PointF tipA = Add(r.HF, Add(Mul(b, 36), Mul(d, -10))), tipB = Add(r.HF, Add(Mul(b, -36), Mul(d, -10)));
-            PointF cA = Add(r.HF, Add(Mul(b, 20), Mul(d, 11))), cB = Add(r.HF, Add(Mul(b, -20), Mul(d, 11)));
+            PointF tipA = Add(r.HF, Add(Mul(b, 34), Mul(d, -9))), tipB = Add(r.HF, Add(Mul(b, -34), Mul(d, -9)));
+            PointF endA = Add(tipA, Add(Mul(b, 3), Mul(d, 6))), endB = Add(tipB, Add(Mul(b, -3), Mul(d, 6)));
             PointF str = Add(r.HF, Mul(d, -8 - pull * 22));
-            g.DrawLine(st.BowString, tipA, str);
-            g.DrawLine(st.BowString, str, tipB);
+            g.DrawLine(st.BowString, endA, str);
+            g.DrawLine(st.BowString, str, endB);
             using (var path = new GraphicsPath())
             {
-                path.AddBezier(tipA, cA, cB, tipB);
-                if (glow) using (var gp = RPen(A(c.Glow, 0.4f * alpha), 9)) g.DrawPath(gp, path);
+                path.AddBezier(endA, Add(tipA, Mul(d, -3)), Add(r.HF, Add(Mul(b, 20), Mul(d, 13))), r.HF);
+                path.AddBezier(r.HF, Add(r.HF, Add(Mul(b, -20), Mul(d, 13))), Add(tipB, Mul(d, -3)), endB);
+                if (glow) using (var gp = RPen(A(c.Glow, 0.4f * alpha), 11)) g.DrawPath(gp, path);
                 g.DrawPath(st.ShaftOut, path);
                 g.DrawPath(st.Shaft, path);
             }
-            g.FillEllipse(st.GlowB, tipA.X - 2.5f, tipA.Y - 2.5f, 5, 5);
-            g.FillEllipse(st.GlowB, tipB.X - 2.5f, tipB.Y - 2.5f, 5, 5);
+            // Griffwicklung, Blattverzierung, Spitzen
+            g.DrawLine(st.Leather, Add(r.HF, Mul(b, 5)), Add(r.HF, Mul(b, -5)));
+            foreach (int sgn in new[] { 1, -1 })
+            {
+                PointF lf = Add(r.HF, Add(Mul(b, 13 * sgn), Mul(d, 8)));
+                var leaf = new[] { Add(lf, Mul(b, 5 * sgn)), Add(lf, Mul(d, 2.6f)), Add(lf, Mul(b, -5 * sgn)), Add(lf, Mul(d, -2.6f)) };
+                g.DrawPolygon(st.Fine, leaf);
+                g.FillPolygon(st.ClothB, leaf);
+            }
+            g.FillEllipse(st.OutlineB, endA.X - 3, endA.Y - 3, 6, 6);
+            g.FillEllipse(st.TrimB, endA.X - 2, endA.Y - 2, 4, 4);
+            g.FillEllipse(st.OutlineB, endB.X - 3, endB.Y - 3, 6, 6);
+            g.FillEllipse(st.TrimB, endB.X - 2, endB.Y - 2, 4, 4);
             if (pull > 0.05f)
             {
                 PointF ah = Add(r.HF, Mul(d, 26));
+                if (P.charge > 0) using (var gb = new SolidBrush(A(c.Glow, 0.35f * alpha))) g.FillEllipse(gb, ah.X - 13, ah.Y - 13, 26, 26);
+                g.DrawLine(st.Fine, str, ah);
                 g.DrawLine(st.Arrow, str, ah);
-                g.FillPolygon(st.GlowB, new[] { Add(ah, Mul(d, 9)), Add(ah, Mul(b, 4)), Add(ah, Mul(b, -4)) });
-                if (P.charge > 0) using (var gb = new SolidBrush(A(c.Glow, 0.35f * alpha))) g.FillEllipse(gb, ah.X - 11, ah.Y - 11, 22, 22);
+                g.FillPolygon(st.EyeCore, new[] { str, Add(str, Add(Mul(d, -5), Mul(b, 3.5f))), Add(str, Mul(d, 4)), Add(str, Add(Mul(d, -5), Mul(b, -3.5f))) });
+                g.FillPolygon(st.GlowB, new[] { Add(ah, Mul(d, 10)), Add(ah, Mul(b, 4.5f)), Add(ah, Mul(b, -4.5f)) });
             }
         }
 
@@ -542,7 +782,8 @@ namespace Sensensturm
             g.ScaleTransform(facing * sc, sc);
             if (pose.Spin != 0) { g.TranslateTransform(0, -50); g.RotateTransform(pose.Spin); g.TranslateTransform(0, 50); }
 
-            if (body == Body.Huntress) DrawScarf(g, st, r, P);
+            if (body == Body.Huntress) DrawCape(g, st, r, P);
+            if (body == Body.Skeleton) DrawLoincloth(g, st, r, pose, P, false);
             DrawLimb(g, st, body, r.Pel, r.KB, r.FB, true, true);
             if (!shieldFront)
             {
@@ -550,9 +791,11 @@ namespace Sensensturm
                 DrawShield(g, st, r.HB, pose.Lean, false, alpha, c);
             }
             DrawTorso(g, st, body, r, pose, c);
+            if (body == Body.Skeleton) DrawShawl(g, st, r, pose, P);
             float glow = 0.6f + 0.4f * (float)Math.Sin(frame * 0.12 + P.slot);
             DrawHead(g, st, body, r.Head, pose.Lean + pose.Head, 1f, mode == 2 ? 0 : glow, P.state == St.Broken);
             DrawLimb(g, st, body, r.Pel, r.KF, r.FF, false, true);
+            if (body == Body.Skeleton) DrawLoincloth(g, st, r, pose, P, true);
             DrawWeapon(g, st, r, c, P, pose, weaponGlow && mode == 0, alpha);
             DrawLimb(g, st, body, r.Sh, r.EF, r.HF, false, false);
             if (shieldFront)

@@ -21,6 +21,8 @@ namespace Sensensturm
         public float Speed = 1f, Jump = 1f, Grav = 1f, Weight = 1f; // Weight = Faktor auf erhaltenen Knockback (kleiner = schwerer)
         public int StatSpeed, StatPower, StatWeight, StatRange;       // 1..5, nur für die Anzeige
         public Color Bone, Shade, Outline, Glow, Eye, Shaft, Blade, Edge, ShieldFace, Rim, Skin;
+        // Kleidung und Ausrüstung (Skelett: Umhang, Lendentuch, Gürtel, Wickel; Jägerin: Kapuze, Weste, Stiefel, Haare)
+        public Color Cloth, ClothDark, Leather, LeatherDark, Hair, Trim, EyeAura;
 
         public string TypeName { get { return Sensensturm.Weapon.Names[Weapon]; } }
 
@@ -32,10 +34,12 @@ namespace Sensensturm
                 Desc = "Allrounder mit großer Reichweite und flüssigen Luft-Combos.",
                 Special = "Aufladbare Seelenernte, Fallbeil-Sturz",
                 StatSpeed = 3, StatPower = 3, StatWeight = 3, StatRange = 4,
-                Bone = Color.FromArgb(200, 145, 255), Shade = Color.FromArgb(140, 88, 212), Outline = Color.FromArgb(32, 8, 58),
-                Glow = Color.FromArgb(222, 150, 255), Eye = Color.FromArgb(255, 232, 255), Shaft = Color.FromArgb(78, 42, 98),
-                Blade = Color.FromArgb(222, 218, 236), Edge = Color.FromArgb(205, 120, 255), ShieldFace = Color.FromArgb(98, 44, 152), Rim = Color.FromArgb(236, 205, 255),
-                Skin = Color.FromArgb(200, 145, 255)
+                Bone = Color.FromArgb(238, 230, 210), Shade = Color.FromArgb(184, 172, 150), Outline = Color.FromArgb(28, 20, 38),
+                Glow = Color.FromArgb(200, 150, 255), Eye = Color.FromArgb(232, 250, 255), Shaft = Color.FromArgb(74, 54, 40),
+                Blade = Color.FromArgb(150, 146, 140), Edge = Color.FromArgb(228, 226, 218), ShieldFace = Color.FromArgb(84, 60, 128), Rim = Color.FromArgb(214, 204, 182),
+                Skin = Color.FromArgb(238, 230, 210),
+                Cloth = Color.FromArgb(96, 66, 146), ClothDark = Color.FromArgb(56, 44, 78), Leather = Color.FromArgb(122, 82, 52),
+                LeatherDark = Color.FromArgb(34, 30, 40), Trim = Color.FromArgb(196, 168, 120), EyeAura = Color.FromArgb(70, 190, 255)
             },
             new CharDef
             {
@@ -43,10 +47,12 @@ namespace Sensensturm
                 Desc = "Allrounder mit großer Reichweite und flüssigen Luft-Combos.",
                 Special = "Aufladbare Seelenernte, Fallbeil-Sturz",
                 StatSpeed = 3, StatPower = 3, StatWeight = 3, StatRange = 4,
-                Bone = Color.FromArgb(118, 182, 255), Shade = Color.FromArgb(66, 120, 214), Outline = Color.FromArgb(6, 22, 58),
-                Glow = Color.FromArgb(110, 225, 255), Eye = Color.FromArgb(225, 252, 255), Shaft = Color.FromArgb(34, 58, 100),
-                Blade = Color.FromArgb(214, 226, 238), Edge = Color.FromArgb(80, 200, 255), ShieldFace = Color.FromArgb(30, 78, 162), Rim = Color.FromArgb(198, 232, 255),
-                Skin = Color.FromArgb(118, 182, 255)
+                Bone = Color.FromArgb(230, 232, 228), Shade = Color.FromArgb(170, 176, 178), Outline = Color.FromArgb(14, 22, 40),
+                Glow = Color.FromArgb(110, 225, 255), Eye = Color.FromArgb(230, 255, 255), Shaft = Color.FromArgb(58, 50, 46),
+                Blade = Color.FromArgb(146, 152, 160), Edge = Color.FromArgb(226, 236, 242), ShieldFace = Color.FromArgb(36, 76, 140), Rim = Color.FromArgb(200, 210, 214),
+                Skin = Color.FromArgb(230, 232, 228),
+                Cloth = Color.FromArgb(40, 86, 150), ClothDark = Color.FromArgb(34, 46, 70), Leather = Color.FromArgb(104, 78, 60),
+                LeatherDark = Color.FromArgb(28, 32, 42), Trim = Color.FromArgb(180, 190, 196), EyeAura = Color.FromArgb(110, 240, 255)
             },
             new CharDef
             {
@@ -67,10 +73,12 @@ namespace Sensensturm
                 Special = "Aufladbare Sternenpfeile, Tritt-Combos, Rankenseil mit großer Reichweite",
                 Speed = 1.1f, Jump = 1.07f, Grav = 0.92f, Weight = 1.12f,
                 StatSpeed = 5, StatPower = 2, StatWeight = 1, StatRange = 5,
-                Bone = Color.FromArgb(70, 190, 160), Shade = Color.FromArgb(36, 112, 100), Outline = Color.FromArgb(6, 28, 32),
-                Glow = Color.FromArgb(140, 255, 214), Eye = Color.FromArgb(235, 255, 248), Shaft = Color.FromArgb(132, 88, 52),
-                Blade = Color.FromArgb(220, 245, 238), Edge = Color.FromArgb(255, 120, 110), ShieldFace = Color.FromArgb(40, 110, 96), Rim = Color.FromArgb(200, 255, 235),
-                Skin = Color.FromArgb(242, 210, 186)
+                Bone = Color.FromArgb(72, 136, 58), Shade = Color.FromArgb(44, 94, 42), Outline = Color.FromArgb(26, 20, 16),
+                Glow = Color.FromArgb(150, 240, 80), Eye = Color.FromArgb(255, 255, 250), Shaft = Color.FromArgb(112, 72, 40),
+                Blade = Color.FromArgb(214, 186, 140), Edge = Color.FromArgb(150, 240, 80), ShieldFace = Color.FromArgb(92, 64, 40), Rim = Color.FromArgb(214, 180, 110),
+                Skin = Color.FromArgb(246, 208, 172),
+                Cloth = Color.FromArgb(70, 134, 56), ClothDark = Color.FromArgb(40, 84, 38), Leather = Color.FromArgb(200, 168, 116),
+                LeatherDark = Color.FromArgb(106, 66, 38), Hair = Color.FromArgb(112, 68, 36), Trim = Color.FromArgb(222, 186, 96)
             },
         };
 
