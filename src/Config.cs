@@ -100,7 +100,8 @@ namespace Sensensturm
             {
                 if (fields == null)
                 {
-                    fields = typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static);
+                    // ohne Konstanten (CurrentVersion): die lassen sich nicht setzen und brachen früher Laden/Übertragen mittendrin ab
+                    fields = Array.FindAll(typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static), f => !f.IsLiteral);
                     Array.Sort(fields, (a, b) => string.CompareOrdinal(a.Name, b.Name));
                 }
                 return fields;
@@ -153,7 +154,7 @@ namespace Sensensturm
                 sb.AppendLine("# Datei löschen, um die Standardwerte wiederherzustellen.");
                 sb.AppendLine("# Im Menü 'Einstellungen > Spielwerte neu laden' werden Änderungen ohne Neustart übernommen.");
                 sb.AppendLine();
-                FieldInfo[] ordered = typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static);
+                FieldInfo[] ordered = Array.FindAll(typeof(Tuning).GetFields(BindingFlags.Public | BindingFlags.Static), f => !f.IsLiteral);
                 Array.Sort(ordered, (a, b) => a.MetadataToken.CompareTo(b.MetadataToken));
                 foreach (FieldInfo f in ordered)
                 {
