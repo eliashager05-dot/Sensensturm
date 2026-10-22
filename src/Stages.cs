@@ -64,23 +64,18 @@ namespace Sensensturm
         readonly List<PointF[]> branches = new List<PointF[]>();
         readonly List<float> branchW = new List<float>();
 
-        // Statische Teile (Bühne, Bäume) werden einmal pro Arena in Bitmaps gezeichnet, pro Frame nur noch eingeblendet
-        static readonly RectangleF arenaRect = new RectangleF(-700, -400, 1400, 980);
-        static readonly RectangleF[] treeRects = { new RectangleF(-1000, -640, 700, 680), new RectangleF(300, -640, 700, 680) };
-        Bitmap arenaBmp;
-        readonly Bitmap[] treeBmp = new Bitmap[2];
+        // Statische Teile (Bühne, Bäume) werden pro Arena in ein Bitmap gezeichnet, pro Frame nur noch eingeblendet (siehe LayerCache)
+        static readonly RectangleF arenaRect = new RectangleF(-700, -400, 1400, 1040);
+        LayerCache arenaCache;
+        int syncedStage = -1;
 
-        static Bitmap CacheLayer(RectangleF world, float res, Action<Graphics> draw)
+        LayerCache StaticCache { get { return Stage == StageDef.Graveyard ? graveCache : arenaCache; } }
+
+        // Die Caches rendern im Hintergrund mit den Pfaden dieser Klasse; vor jeder anderen Nutzung darauf warten
+        void WaitCaches()
         {
-            var bmp = new Bitmap((int)Math.Ceiling(world.Width * res), (int)Math.Ceiling(world.Height * res), PixelFormat.Format32bppPArgb);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.ScaleTransform(res, res);
-                g.TranslateTransform(-world.X, -world.Y);
-                draw(g);
-            }
-            return bmp;
+            if (arenaCache != null) arenaCache.Wait();
+            graveCache.Wait();
         }
 
         static readonly float[,] floatRocks =
@@ -93,6 +88,7 @@ namespace Sensensturm
         void SyncStage()
         {
             Stage = StageDef.Valid(Stage);
+            if (syncedStage != Stage) { syncedStage = Stage; WaitCaches(); }
             if (motesStage != Stage)
             {
                 motesStage = Stage;
@@ -173,6 +169,7 @@ namespace Sensensturm
 
         void BuildStageGeometry()
         {
+            WaitCaches();
             geoStage = Stage;
             var r = new Random(100 + Stage);
             stones = WPath(); stoneHi = WPath(); moss = WPath(); tufts = WPath(); joints = new GraphicsPath(); bits = WPath(); bitsAlt = WPath();
@@ -227,13 +224,10 @@ namespace Sensensturm
             AddTree(r, -650, 1);
             if (Stage != StageDef.Grove) AddTree(r, 650, -1);
 
-            if (arenaBmp != null) arenaBmp.Dispose();
-            arenaBmp = CacheLayer(arenaRect, 1.25f, DrawArenaStatic);
-            for (int i = 0; i < 2; i++)
-            {
-                if (treeBmp[i] != null) treeBmp[i].Dispose();
-                treeBmp[i] = Stage == StageDef.Grove && i == 1 ? null : CacheLayer(treeRects[i], 1f, DrawTrees);
-            }
+            // Bühne und Bäume (direkt nacheinander gezeichnet) in einem gemeinsamen Bitmap
+            if (arenaCache != null) arenaCache.Dispose();
+            var rect = RectangleF.FromLTRB(-1000, -640, Stage == StageDef.Grove ? arenaRect.Right : 1000, arenaRect.Bottom);
+            arenaCache = new LayerCache(rect, g => { DrawArenaStatic(g); DrawTrees(g); });
         }
 
         void AddTree(Random r, float x, int dir)
@@ -700,17 +694,19 @@ namespace Sensensturm
 
         void DrawStageArena(Graphics g)
         {
-            using (var b = new SolidBrush(A(Th.Under, 0.14f))) g.FillEllipse(b, -540, 360, 1080, 280);
-            g.DrawImage(arenaBmp, arenaRect);
+            arenaCache.Draw(g);
         }
 
+        // läuft im Hintergrund (LayerCache): Thema der gebauten Geometrie verwenden, nicht das aktuelle Stage-Feld
         void DrawArenaStatic(Graphics g)
         {
-            StageTheme t = Th;
+            StageTheme t = themes[geoStage];
             Box M = Arena.Main;
-            using (var b = new SolidBrush(t.Joint)) g.FillPath(b, island);
+            // Leuchten unter der Insel
+            using (var b = new SolidBrush(A(t.Under, 0.14f))) g.FillEllipse(b, -540, 360, 1080, 280);
+            using (var b = new SolidBrush(t.Joint)) g.FillPath(b, islandBg);
             var clip = g.Save();
-            g.SetClip(island, CombineMode.Intersect);
+            g.SetClip(islandBg, CombineMode.Intersect);
             using (var b = new LinearGradientBrush(new PointF(0, 10), new PointF(0, 570), t.Block, t.BlockDark)) g.FillPath(b, stones);
             using (var b = new SolidBrush(Color.FromArgb(26, 255, 255, 255))) g.FillPath(b, stoneHi);
             if (t.Glow)
@@ -798,7 +794,7 @@ namespace Sensensturm
 
         void DrawTrees(Graphics g)
         {
-            StageTheme t = Th;
+            StageTheme t = themes[geoStage];
             using (var o = RPen(t.Joint, 1))
             using (var p = RPen(t.Bark, 1))
             using (var hl = RPen(A(Mixc(t.Bark, Color.White, 0.25f), 0.8f), 1))
@@ -818,8 +814,7 @@ namespace Sensensturm
         void DrawStageDecor(Graphics g)
         {
             StageTheme t = Th;
-            for (int i = 0; i < 2; i++)
-                if (treeBmp[i] != null) g.DrawImage(treeBmp[i], treeRects[i]);
+            // die Bäume stecken im Bitmap der Bühne (DrawArena)
             if (t.Glow)
                 for (int k = 0; k < 14; k++)
                 {

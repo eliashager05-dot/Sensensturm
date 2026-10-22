@@ -742,7 +742,8 @@ namespace Sensensturm
             float sc = Math.Min(W / (float)Renderer.VW, H / (float)Renderer.VH);
             float ox = (W - Renderer.VW * sc) / 2f, oy = (H - Renderer.VH * sc) / 2f;
             mouseSc = sc; mouseOx = ox; mouseOy = oy;
-            g.Clear(Color.Black);
+            // das Hintergrundbild deckt alles ab, schwarz löschen nur bei Rändern (anderes Seitenverhältnis)
+            if (ox > 0.01f || oy > 0.01f) g.Clear(Color.Black);
             // Arena im Hintergrund: im Match die gespielte, in den Lobbys die gewählte
             R.Stage = scr == Scr.Match && state != null ? state.stage
                 : scr == Scr.Local || scr == Scr.Host ? Settings.Stage

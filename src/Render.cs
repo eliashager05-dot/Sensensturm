@@ -52,8 +52,8 @@ namespace Sensensturm
         int bgW, bgH, bgStage = -1;
         readonly Dictionary<int, Style> styles = new Dictionary<int, Style>();
         public Font FTitle, FBig, FMed, FSmall, FTiny, FHudDmg, FHudName, FHuge;
-        GraphicsPath island, midLayer;
-        LinearGradientBrush islandBrush;
+        GraphicsPath island, islandBg, midLayer; // islandBg: Kopie nur für das Rendern im Hintergrund (LayerCache)
+        LayerCache graveCache;
 
         public Renderer()
         {
@@ -66,6 +66,7 @@ namespace Sensensturm
             FHudDmg = new Font("Segoe UI Black", 38, FontStyle.Bold, GraphicsUnit.Pixel);
             FHudName = new Font("Segoe UI", 17, FontStyle.Bold, GraphicsUnit.Pixel);
             BuildArena();
+            graveCache = new LayerCache(arenaRect, DrawGraveyardStatic);
             for (int i = 0; i < 46; i++) motes.Add(NewMote(true));
         }
 
@@ -1020,6 +1021,10 @@ namespace Sensensturm
 
         void DrawGhosts(Graphics g, PlayerState[] ps)
         {
+            if (ghosts.Count == 0) return;
+            // Geisterbilder sind blass und einfarbig, Kantenglättung fällt dort nicht auf, kostet aber viel Zeit
+            var sm = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.HighSpeed;
             for (int i = ghosts.Count - 1; i >= 0; i--)
             {
                 Ghost gh = ghosts[i];
@@ -1027,6 +1032,7 @@ namespace Sensensturm
                 float a = gh.Life / 12f * 0.35f;
                 DrawFighterPose(g, dummy, gh.Pose, gh.X, gh.Y, gh.Facing, gh.Ground, 2, a, false);
             }
+            g.SmoothingMode = sm;
         }
 
         // ================================================================ Arena
@@ -1040,7 +1046,7 @@ namespace Sensensturm
                 new PointF(325, 450), new PointF(170, 515), new PointF(50, 560), new PointF(-60, 550), new PointF(-210, 495),
                 new PointF(-390, 425), new PointF(-545, 360), new PointF(-640, 300)
             });
-            islandBrush = new LinearGradientBrush(new PointF(0, -10), new PointF(0, 570), Color.FromArgb(78, 64, 104), Color.FromArgb(18, 12, 32));
+            islandBg = (GraphicsPath)island.Clone();
 
             midLayer = new GraphicsPath();
             var r = new Random(11);
@@ -1150,15 +1156,15 @@ namespace Sensensturm
             g.Restore(gs);
         }
 
-        void DrawArena(Graphics g)
+        // unbewegliche Teile des Mondfriedhofs, gecacht über LayerCache (läuft im Hintergrund)
+        void DrawGraveyardStatic(Graphics g)
         {
-            if (Stage != StageDef.Graveyard) { DrawStageArena(g); return; }
             Box M = Arena.Main;
             // Leuchten unter der Insel
             using (var b = new SolidBrush(Color.FromArgb(28, 170, 90, 255))) g.FillEllipse(b, -520, 380, 1040, 260);
-            g.FillPath(islandBrush, island);
+            using (var ib = new LinearGradientBrush(new PointF(0, -10), new PointF(0, 570), Color.FromArgb(78, 64, 104), Color.FromArgb(18, 12, 32))) g.FillPath(ib, islandBg);
             var clip = g.Save();
-            g.SetClip(island, CombineMode.Intersect);
+            g.SetClip(islandBg, CombineMode.Intersect);
             using (var p = new Pen(Color.FromArgb(70, 10, 5, 20), 3))
             {
                 for (int row = 0; row < 9; row++)
@@ -1168,23 +1174,7 @@ namespace Sensensturm
                     for (float x = -640 + (row % 2) * 45; x < 640; x += 90) g.DrawLine(p, x, y - 38, x, y);
                 }
             }
-            // Kristalle
-            for (int i = 0; i < 9; i++)
-            {
-                float x = -500 + i * 125, y = 340 + (i % 3) * 40 - Math.Abs(x) * 0.12f;
-                float fl = 0.6f + 0.4f * (float)Math.Sin(frame * 0.04 + i * 1.3);
-                using (var b = new SolidBrush(Color.FromArgb((int)(110 * fl), 190, 120, 255)))
-                    g.FillPolygon(b, new[] { new PointF(x, y), new PointF(x + 10, y + 28), new PointF(x, y + 50), new PointF(x - 10, y + 28) });
-            }
             g.Restore(clip);
-            // Runen
-            for (int i = 0; i < 8; i++)
-            {
-                float x = -560 + i * 160;
-                float fl = 0.5f + 0.5f * (float)Math.Sin(frame * 0.05 + i);
-                using (var b = new SolidBrush(Color.FromArgb((int)(40 + 70 * fl), 200, 150, 255))) g.FillEllipse(b, x - 14, 96, 28, 28);
-                using (var p = new Pen(Color.FromArgb((int)(120 + 100 * fl), 230, 200, 255), 2)) { g.DrawEllipse(p, x - 8, 102, 16, 16); g.DrawLine(p, x, 98, x, 122); }
-            }
             // Oberkante
             using (var b = new LinearGradientBrush(new PointF(0, -7), new PointF(0, 14), Color.FromArgb(150, 136, 182), Color.FromArgb(82, 68, 110)))
                 g.FillRectangle(b, M.L - 10, -7, M.R - M.L + 20, 20);
@@ -1203,6 +1193,35 @@ namespace Sensensturm
                 using (var b = new LinearGradientBrush(new PointF(0, sp.Y - 4), new PointF(0, sp.Y + 16), Color.FromArgb(160, 146, 196), Color.FromArgb(76, 62, 104)))
                     g.FillRectangle(b, sp.L, sp.Y - 4, sp.R - sp.L, 18);
                 using (var p = new Pen(Color.FromArgb(225, 215, 250), 2)) g.DrawLine(p, sp.L, sp.Y - 4, sp.R, sp.Y - 4);
+            }
+        }
+
+        void DrawArena(Graphics g)
+        {
+            if (Stage != StageDef.Graveyard) { DrawStageArena(g); return; }
+            graveCache.Draw(g);
+            var clip = g.Save();
+            g.SetClip(island, CombineMode.Intersect);
+            // Kristalle
+            for (int i = 0; i < 9; i++)
+            {
+                float x = -500 + i * 125, y = 340 + (i % 3) * 40 - Math.Abs(x) * 0.12f;
+                float fl = 0.6f + 0.4f * (float)Math.Sin(frame * 0.04 + i * 1.3);
+                using (var b = new SolidBrush(Color.FromArgb((int)(110 * fl), 190, 120, 255)))
+                    g.FillPolygon(b, new[] { new PointF(x, y), new PointF(x + 10, y + 28), new PointF(x, y + 50), new PointF(x - 10, y + 28) });
+            }
+            g.Restore(clip);
+            // Runen
+            for (int i = 0; i < 8; i++)
+            {
+                float x = -560 + i * 160;
+                float fl = 0.5f + 0.5f * (float)Math.Sin(frame * 0.05 + i);
+                using (var b = new SolidBrush(Color.FromArgb((int)(40 + 70 * fl), 200, 150, 255))) g.FillEllipse(b, x - 14, 96, 28, 28);
+                using (var p = new Pen(Color.FromArgb((int)(120 + 100 * fl), 230, 200, 255), 2)) { g.DrawEllipse(p, x - 8, 102, 16, 16); g.DrawLine(p, x, 98, x, 122); }
+            }
+            // Leuchten unter den Schwebeplattformen
+            foreach (var sp in Arena.Soft)
+            {
                 float fl = 0.5f + 0.5f * (float)Math.Sin(frame * 0.06 + sp.L);
                 using (var b = new SolidBrush(Color.FromArgb((int)(60 + 60 * fl), 200, 140, 255))) g.FillEllipse(b, (sp.L + sp.R) / 2 - 10, sp.Y + 22, 20, 20);
             }
@@ -1594,7 +1613,11 @@ namespace Sensensturm
             DrawMidLayer(g);
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
-            g.ScaleTransform(Zoom, Zoom);
+            // Zoom auf den Maßstab des Bühnen-Bitmaps einrasten lassen, damit es unskaliert (schnell) kopiert werden kann
+            float dev;
+            using (Matrix m = g.Transform) dev = m.Elements[0];
+            float zoom = StaticCache.Snap(dev * Zoom) / dev;
+            g.ScaleTransform(zoom, zoom);
             g.TranslateTransform(-CamX + shakeX, -CamY + shakeY);
 
             if (Stage != StageDef.Graveyard) DrawStageMotes(g, false);
@@ -1647,12 +1670,16 @@ namespace Sensensturm
             }
 
             // Schimmer am unteren Rand (Abgrund)
+            // achsenparallele Flächen über den ganzen Bildschirm brauchen keine Kantenglättung
+            var sm = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.HighSpeed;
             Color abyss = Stage != StageDef.Graveyard ? Th.Abyss : Color.FromArgb(120, 60, 200);
             using (var b = new LinearGradientBrush(new PointF(0, VH - 160), new PointF(0, VH), Color.FromArgb(0, abyss), Color.FromArgb(70, abyss)))
                 g.FillRectangle(b, 0, VH - 160, VW, 160);
 
             if (Flash > 0)
                 using (var b = new SolidBrush(A(flashColor, Flash * 0.8f))) g.FillRectangle(b, 0, 0, VW, VH);
+            g.SmoothingMode = sm;
         }
 
         public static Color DamageColor(float d)
