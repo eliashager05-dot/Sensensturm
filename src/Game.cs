@@ -212,6 +212,7 @@ namespace Sensensturm
                 host.HostChar = hostChar;
                 host.Stocks = Settings.Stocks;
                 host.Minutes = Settings.MatchMinutes;
+                host.Stage = Settings.Stage;
                 host.InMatch = false;
                 if (host.ClientJustJoined) { host.ClientJustJoined = false; Audio.Play(Sfx.Charge, 0.8f); }
             }
@@ -340,6 +341,7 @@ namespace Sensensturm
                         Add(Settings.Opponent == 0 ? "Spieler 2" : Settings.Opponent == 4 ? "Puppe" : "CPU", CharDef.All[Settings.P2Char].Name + " (" + CharDef.All[Settings.P2Char].TypeName + ")", null, d => Settings.P2Char = CharDef.Next(Settings.P2Char, d, Settings.P1Char));
                         Add("Leben", Settings.Stocks.ToString(), null, d => Settings.Stocks = Math.Max(1, Math.Min(9, Settings.Stocks + d)));
                         Add("Zeitlimit", MinutesText(Settings.MatchMinutes), null, d => Settings.MatchMinutes = NextMinutes(Settings.MatchMinutes, d));
+                        Add("Arena", StageDef.Names[Settings.Stage], null, d => Settings.Stage = Cycle(Settings.Stage, d, StageDef.Count));
                         Add("Kampf starten", null, StartLocal, null);
                         Add("Zurück", null, () => Go(Scr.Main), null);
                         break;
@@ -348,6 +350,7 @@ namespace Sensensturm
                     Add("Dein Charakter", CharDef.All[hostChar].Name + " (" + CharDef.All[hostChar].TypeName + ")", null, d => hostChar = CharDef.Next(hostChar, d, host != null && host.HasClient ? host.ClientChar : -1));
                     Add("Leben", Settings.Stocks.ToString(), null, d => Settings.Stocks = Math.Max(1, Math.Min(9, Settings.Stocks + d)));
                     Add("Zeitlimit", MinutesText(Settings.MatchMinutes), null, d => Settings.MatchMinutes = NextMinutes(Settings.MatchMinutes, d));
+                    Add("Arena", StageDef.Names[Settings.Stage], null, d => Settings.Stage = Cycle(Settings.Stage, d, StageDef.Count));
                     Add(host != null && host.HasClient ? "Match starten" : "Match starten (warte auf Spieler 2)", null, StartHostMatch, null, host != null && host.HasClient);
                     if (online) Add("Raum-Code kopieren", null, () => { try { Clipboard.SetText(link.Code); Toast("Code " + link.Code + " kopiert – schick ihn deinem Mitspieler.", false); } catch { } }, null);
                     Add("Lobby schließen", null, () => { CloseHost(); Go(Scr.Main); }, null);
@@ -556,7 +559,7 @@ namespace Sensensturm
             bot = Settings.Opponent > 0 ? new Bot(Settings.Opponent == 4 ? 0 : Settings.Opponent) : null;
             names[0] = "Spieler 1";
             names[1] = Settings.Opponent == 4 ? "Trainingspuppe" : bot != null ? "CPU" : "Spieler 2";
-            BeginMatch(GameState.NewMatch(Settings.P1Char, Settings.P2Char, Settings.Stocks, Settings.MatchMinutes));
+            BeginMatch(GameState.NewMatch(Settings.P1Char, Settings.P2Char, Settings.Stocks, Settings.MatchMinutes, Settings.Stage));
             Settings.Save();
         }
 
@@ -569,7 +572,7 @@ namespace Sensensturm
             names[0] = Settings.PlayerName;
             names[1] = host.ClientName;
             int cc = host.ClientChar == hostChar ? CharDef.Next(hostChar, 1, hostChar) : host.ClientChar;
-            BeginMatch(GameState.NewMatch(hostChar, cc, Settings.Stocks, Settings.MatchMinutes));
+            BeginMatch(GameState.NewMatch(hostChar, cc, Settings.Stocks, Settings.MatchMinutes, Settings.Stage));
             Settings.P1Char = hostChar;
             Settings.Save();
         }
@@ -740,6 +743,10 @@ namespace Sensensturm
             float ox = (W - Renderer.VW * sc) / 2f, oy = (H - Renderer.VH * sc) / 2f;
             mouseSc = sc; mouseOx = ox; mouseOy = oy;
             g.Clear(Color.Black);
+            // Arena im Hintergrund: im Match die gespielte, in den Lobbys die gewählte
+            R.Stage = scr == Scr.Match && state != null ? state.stage
+                : scr == Scr.Local || scr == Scr.Host ? Settings.Stage
+                : scr == Scr.ClientLobby && client != null ? client.Stage : StageDef.Graveyard;
             R.DrawBackground(g, (int)Math.Ceiling(Renderer.VW * sc), (int)Math.Ceiling(Renderer.VH * sc), (int)ox, (int)oy);
             g.TranslateTransform(ox, oy);
             g.ScaleTransform(sc, sc);
@@ -881,7 +888,7 @@ namespace Sensensturm
                     break;
                 case Scr.Local:
                     DrawTitle(g, "Lokal spielen");
-                    DrawItems(g, 330, 168, 620, 46, 7);
+                    DrawItems(g, 330, 160, 620, 44, 6);
                     DrawCharCard(g, Settings.P1Char, 20, 150, "SPIELER 1", false);
                     DrawCharCard(g, Settings.P2Char, 960, 150, Settings.Opponent == 0 ? "SPIELER 2" : Settings.Opponent == 4 ? "TRAININGSPUPPE" : "CPU", true);
                     Panel(g, 230, 580, 820, 110);
@@ -904,7 +911,7 @@ namespace Sensensturm
                                 Line(g, "• " + host.ClientName + " verbunden (" + (host.OverRelay ? "Relay" : "direkt") + ") · " + (host.Ping >= 0 ? host.Ping + " ms" : "..."), 350, 312, good, R.FMed);
                             else
                                 Line(g, (frame % 60 < 40 ? "• " : "   ") + "Warte auf Mitspieler ...", 350, 312, warn, R.FMed);
-                            DrawItems(g, 330, 385, 620, 50, 10);
+                            DrawItems(g, 330, 380, 620, 40, 5);
                             DrawCharCard(g, hostChar, 20, 150, "DU (HOST)", false);
                             if (host != null && host.HasClient) DrawCharCard(g, host.ClientChar, 960, 150, host.ClientName.ToUpper(), true);
                             break;
@@ -921,7 +928,7 @@ namespace Sensensturm
                             Line(g, "• " + host.ClientName + " verbunden  ·  Ping " + (host.Ping >= 0 ? host.Ping + " ms" : "..."), 350, 312, good, R.FMed);
                         else
                             Line(g, (frame % 60 < 40 ? "• " : "   ") + "Warte auf Spieler 2 ...", 350, 312, warn, R.FMed);
-                        DrawItems(g, 330, 385, 620, 50, 10);
+                        DrawItems(g, 330, 380, 620, 40, 5);
                         DrawCharCard(g, hostChar, 20, 150, "DU (HOST)", false);
                         if (host != null && host.HasClient) DrawCharCard(g, host.ClientChar, 960, 150, host.ClientName.ToUpper(), true);
                         break;
@@ -960,7 +967,8 @@ namespace Sensensturm
                             Line(g, "Verbunden mit " + client.HostName, 350, 165, good, R.FMed);
                             Line(g, client.Host + "   ·   Ping: " + (client.Ping >= 0 ? client.Ping + " ms" : "..."), 350, 205, info);
                             Line(g, "Leben: " + client.Stocks + "     Zeitlimit: " + MinutesText(client.Minutes), 350, 235, info);
-                            Line(g, "Wähle unten deinen Charakter.", 350, 265, info);
+                            Line(g, "Arena: " + StageDef.Names[client.Stage], 350, 262, info);
+                            Line(g, "Wähle unten deinen Charakter.", 350, 289, info);
                             Line(g, (frame % 60 < 40 ? "• " : "   ") + "Warte auf den Host ...", 350, 330, warn, R.FMed);
                             DrawCharCard(g, client.HostChar, 20, 150, "HOST", false);
                             DrawCharCard(g, client.MyChar, 960, 150, "DU", true);

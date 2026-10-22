@@ -11,6 +11,16 @@
 Jeder Typ hat ein eigenes Moveset (14 Angriffe + Griff/Wurf) und eigene Werte für Tempo, Sprungkraft, Fallgeschwindigkeit und Gewicht. Die Auswahl erfolgt unter „Lokal spielen“ bzw. in der LAN-Lobby (beide Spieler wählen selbst). Combos für jeden Typ stehen unter *Einstellungen > Combos lernen* (Links/Rechts wechselt die Waffe).
 Alle Grafiken werden im Code gezeichnet, alle Sounds werden synthetisiert. Es gibt keine fremden Assets.
 
+## Arenen
+Unter „Lokal spielen“ bzw. in der Host-Lobby wählt man unter **Arena** eine von vier Arenen. Der Client übernimmt automatisch die Arena des Hosts. Alle Arenen haben denselben Aufbau (Hauptbühne + drei Schwebeplattformen), sie unterscheiden sich nur im Aussehen:
+
+| Arena | Stimmung |
+|---|---|
+| **Mondfriedhof** | Nacht, Vollmond, Grabsteine und Kerzen (Original) |
+| **Kirschblütental** | Kirschbäume, Steinlaternen, Pagoden-Burg, Wasserfälle, Torii im See, fallende Blütenblätter |
+| **Herbsttempel** | Sonnenuntergang, riesige Buddha-Statue, rote Ahornbäume, Tempel auf Felsinseln, Wolkenmeer, fallende Blätter |
+| **Sternenhain** | Sternennacht, leuchtender Weltenbaum, Sichelmond, Ruinentor mit Runen, Leuchtpilze, Glühwürmchen |
+
 ## Starten
 `Sensensturm.exe` doppelklicken. Benötigt wird nur Windows 10/11 (das .NET Framework 4.8 ist dort bereits enthalten).
 Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensensturm.exe`).

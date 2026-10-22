@@ -15,7 +15,7 @@ namespace Sensensturm
     // (Client-Side Prediction) und gleicht sie mit jedem Snapshot ab (Reconciliation).
     public static class Pk
     {
-        public const byte Version = 5;
+        public const byte Version = 6;
         public const byte Discover = 1, DiscoverReply = 2, Join = 3, Welcome = 4, Reject = 5, Lobby = 6, Input = 7,
             Snapshot = 8, Ping = 9, Pong = 10, Bye = 11, Hello = 12, Punch = 13;
 
@@ -279,7 +279,7 @@ namespace Sensensturm
         public string ClientName = "";
         public int Ping = -1;
         public readonly List<string> Messages = new List<string>();
-        public int HostChar, Stocks, Minutes, ClientChar = 1;
+        public int HostChar, Stocks, Minutes, Stage, ClientChar = 1;
         public bool InMatch;
         public bool ClientJustJoined;
 
@@ -414,6 +414,7 @@ namespace Sensensturm
             w.Write((byte)ClientChar);
             w.Write((byte)Stocks);
             w.Write((byte)Minutes);
+            w.Write((byte)Stage);
             Sock.Send(Client, Pk.End(w));
         }
 
@@ -489,7 +490,7 @@ namespace Sensensturm
         public int Status = Idle;
         public string Error = "";
         public string HostName = "";
-        public int HostChar, Stocks = 3, Minutes = 5, Ping = -1, MyChar = 1, WantChar = 1;
+        public int HostChar, Stocks = 3, Minutes = 5, Stage, Ping = -1, MyChar = 1, WantChar = 1;
         public bool LobbyReceived;
         public readonly List<FoundHost> Found = new List<FoundHost>();
         public bool Opened;
@@ -637,6 +638,7 @@ namespace Sensensturm
                     MyChar = r.ReadByte();
                     Stocks = r.ReadByte();
                     Minutes = r.ReadByte();
+                    Stage = StageDef.Valid(r.ReadByte());
                     LobbyReceived = true;
                     AuthTick = -1;
                     break;

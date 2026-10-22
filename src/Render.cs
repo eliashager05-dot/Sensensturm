@@ -29,7 +29,7 @@ namespace Sensensturm
         public PointF Pel, Chest, Sh, Head, EF, HF, EB, HB, KF, FF, KB, FB, Butt, Top, Tip, Inner, BladeA, BladeB, InA, InB;
     }
 
-    public class Renderer
+    public partial class Renderer
     {
         public const int VW = 1280, VH = 720;
         public float CamX = 0, CamY = -120, Zoom = 0.8f;
@@ -49,7 +49,7 @@ namespace Sensensturm
         int goTimer;
         int frame;
         Bitmap bg;
-        int bgW, bgH;
+        int bgW, bgH, bgStage = -1;
         readonly Dictionary<int, Style> styles = new Dictionary<int, Style>();
         public Font FTitle, FBig, FMed, FSmall, FTiny, FHudDmg, FHudName, FHuge;
         GraphicsPath island, midLayer;
@@ -1075,11 +1075,12 @@ namespace Sensensturm
         void BuildBackground(int w, int h)
         {
             if (bg != null) bg.Dispose();
-            bgW = w; bgH = h;
+            bgW = w; bgH = h; bgStage = Stage;
             bg = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(bg))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                if (Stage != StageDef.Graveyard) { PaintStageBackground(g, w, h); return; }
                 using (var b = new LinearGradientBrush(new Point(0, 0), new Point(0, h), Color.FromArgb(10, 6, 26), Color.FromArgb(58, 26, 74)))
                     g.FillRectangle(b, 0, 0, w, h);
                 var r = new Random(3);
@@ -1117,8 +1118,9 @@ namespace Sensensturm
 
         public void DrawBackground(Graphics g, int pixW, int pixH, int ox, int oy)
         {
+            SyncStage();
             int bw = (int)(pixW * 1.12f), bh = (int)(pixH * 1.12f);
-            if (bg == null || bgW != bw || bgH != bh) BuildBackground(bw, bh);
+            if (bg == null || bgW != bw || bgH != bh || bgStage != Stage) BuildBackground(bw, bh);
             float px = Math.Max(-1, Math.Min(1, CamX / 1400f)), py = Math.Max(-1, Math.Min(1, (CamY + 150) / 900f));
             int dx = (int)(-(bw - pixW) / 2f - px * (bw - pixW) / 2f);
             int dy = (int)(-(bh - pixH) / 2f - py * (bh - pixH) / 2f);
@@ -1130,6 +1132,7 @@ namespace Sensensturm
 
         void DrawMidLayer(Graphics g)
         {
+            if (Stage != StageDef.Graveyard) { DrawStageMid(g); return; }
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
             float z = 0.25f + Zoom * 0.5f;
@@ -1149,6 +1152,7 @@ namespace Sensensturm
 
         void DrawArena(Graphics g)
         {
+            if (Stage != StageDef.Graveyard) { DrawStageArena(g); return; }
             Box M = Arena.Main;
             // Leuchten unter der Insel
             using (var b = new SolidBrush(Color.FromArgb(28, 170, 90, 255))) g.FillEllipse(b, -520, 380, 1040, 260);
@@ -1206,6 +1210,7 @@ namespace Sensensturm
 
         void DrawDecor(Graphics g)
         {
+            if (Stage != StageDef.Graveyard) { DrawStageDecor(g); return; }
             // Grabsteine und Kerzen hinter den Kämpfern
             float[] gx = { -560, -470, 430, 540 };
             for (int i = 0; i < gx.Length; i++)
@@ -1233,6 +1238,7 @@ namespace Sensensturm
 
         Particle NewMote(bool anywhere)
         {
+            if (Stage != StageDef.Graveyard) return NewStageMote(anywhere);
             return new Particle
             {
                 Kind = 1,
@@ -1464,8 +1470,9 @@ namespace Sensensturm
             {
                 Particle p = motes[i];
                 p.X += p.VX + (float)Math.Sin(frame * 0.01 + i) * 0.2f; p.Y += p.VY;
+                p.Rot += p.VR;
                 p.Life--;
-                if (p.Life <= 0 || p.Y < -1100) motes[i] = NewMote(false);
+                if (p.Life <= 0 || p.Y < -1100 || p.Y > 720) motes[i] = NewMote(false);
             }
             for (int i = ghosts.Count - 1; i >= 0; i--) { ghosts[i].Life--; if (ghosts[i].Life <= 0) ghosts.RemoveAt(i); }
             for (int i = 0; i < 2; i++)
@@ -1582,14 +1589,18 @@ namespace Sensensturm
         public void DrawWorld(Graphics g, GameState s, bool showHitboxes)
         {
             curPlayers = s.p;
+            Stage = s.stage;
+            SyncStage();
             DrawMidLayer(g);
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
             g.ScaleTransform(Zoom, Zoom);
             g.TranslateTransform(-CamX + shakeX, -CamY + shakeY);
 
-            foreach (var m in motes)
-                using (var b = new SolidBrush(A(m.C, 0.35f + 0.25f * (float)Math.Sin(frame * 0.05 + m.X)))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
+            if (Stage != StageDef.Graveyard) DrawStageMotes(g, false);
+            else
+                foreach (var m in motes)
+                    using (var b = new SolidBrush(A(m.C, 0.35f + 0.25f * (float)Math.Sin(frame * 0.05 + m.X)))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
 
             DrawArena(g);
             DrawDecor(g);
@@ -1601,6 +1612,7 @@ namespace Sensensturm
             DrawFighter(g, s.p[1 - first], showHitboxes);
             DrawProjectiles(g, s.p);
             DrawParticles(g, true);
+            if (Stage != StageDef.Graveyard) DrawStageMotes(g, true);
 
             // Namensschilder
             for (int i = 0; i < 2; i++)
@@ -1635,7 +1647,8 @@ namespace Sensensturm
             }
 
             // Schimmer am unteren Rand (Abgrund)
-            using (var b = new LinearGradientBrush(new PointF(0, VH - 160), new PointF(0, VH), Color.FromArgb(0, 120, 60, 200), Color.FromArgb(70, 120, 60, 200)))
+            Color abyss = Stage != StageDef.Graveyard ? Th.Abyss : Color.FromArgb(120, 60, 200);
+            using (var b = new LinearGradientBrush(new PointF(0, VH - 160), new PointF(0, VH), Color.FromArgb(0, abyss), Color.FromArgb(70, abyss)))
                 g.FillRectangle(b, 0, VH - 160, VW, 160);
 
             if (Flash > 0)
@@ -1737,13 +1750,16 @@ namespace Sensensturm
         // Menühintergrund mit langsam animierter Szene
         public void DrawMenuBackdrop(Graphics g)
         {
+            SyncStage();
             DrawMidLayer(g);
             var gs = g.Save();
             g.TranslateTransform(VW / 2f, VH / 2f);
             g.ScaleTransform(0.6f, 0.6f);
             g.TranslateTransform(0, 120);
-            foreach (var m in motes)
-                using (var b = new SolidBrush(A(m.C, 0.35f))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
+            if (Stage != StageDef.Graveyard) DrawStageMotes(g, false);
+            else
+                foreach (var m in motes)
+                    using (var b = new SolidBrush(A(m.C, 0.35f))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
             DrawArena(g);
             DrawDecor(g);
             g.Restore(gs);
