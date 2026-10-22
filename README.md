@@ -17,6 +17,14 @@ Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensenst
 
 Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 
+## Online-Spiel (über das Internet, verschiedene Netzwerke)
+1. Host: **Online-Spiel erstellen**. Es erscheint ein 6-stelliger **Raum-Code** (mit „Raum-Code kopieren“ in die Zwischenablage).
+2. Mitspieler: **Online-Spiel beitreten**, Code eingeben, **Verbinden**.
+3. Beide wählen ihren Charakter, dann startet der Host das Match.
+
+Keine Portfreigabe nötig: Beide PCs treffen sich über einen öffentlichen Vermittlungsserver (MQTT, ausgehender TCP-Port 1883). Zuerst wird eine **Direktverbindung** per UDP-Hole-Punching aufgebaut (STUN). Klappt das nicht, etwa bei strenger Firewall oder symmetrischem NAT in Schul- und Firmennetzen, läuft das Spiel automatisch **über das Relay** (etwas höhere Verzögerung, 30 statt 60 Updates/s). Die Verbindungsart wird oben rechts angezeigt.
+Hinweis: Der Vermittlungsserver ist ein öffentlicher Testdienst (broker.hivemq.com, Ersatz: broker.emqx.io, test.mosquitto.org). Er ist meist zuverlässig, aber ohne Garantie.
+
 ## LAN-Spiel (zwei PCs im selben WLAN/LAN)
 1. PC 1: **LAN-Spiel erstellen**. IP-Adresse und Port (Standard 7777) werden angezeigt.
 2. PC 2: **LAN-Spiel beitreten**. Die Lobby erscheint meist automatisch unter „Gefunden“, sonst die IP eintippen und **Verbinden** wählen.

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Text;
 
 namespace Sensensturm
 {
@@ -14,9 +15,9 @@ namespace Sensensturm
     // (Client-Side Prediction) und gleicht sie mit jedem Snapshot ab (Reconciliation).
     public static class Pk
     {
-        public const byte Version = 4;
+        public const byte Version = 5;
         public const byte Discover = 1, DiscoverReply = 2, Join = 3, Welcome = 4, Reject = 5, Lobby = 6, Input = 7,
-            Snapshot = 8, Ping = 9, Pong = 10, Bye = 11, Hello = 12;
+            Snapshot = 8, Ping = 9, Pong = 10, Bye = 11, Hello = 12, Punch = 13;
 
         public static BinaryWriter Begin(byte type)
         {
@@ -90,10 +91,22 @@ namespace Sensensturm
         }
     }
 
+    // UDP-Socket. Online kann zusätzlich ein Relay (MQTT) hängen: Pakete an RelayPeer laufen dann über den
+    // Vermittlungsserver, eingehende Relay-Pakete erscheinen als Pakete von RelayPeer. Host/Client merken davon nichts.
     public class NetSocket
     {
+        public static readonly IPEndPoint RelayPeer = new IPEndPoint(new IPAddress(new byte[] { 0, 0, 0, 1 }), 1);
+
         Socket s;
         readonly byte[] rb = new byte[16384];
+        public int LocalPort;
+        public volatile MqttRelay Relay;
+        public string RelayIn, RelayOut;
+        public volatile IPEndPoint StunResult;
+        public bool AutoPunchReply;
+        readonly Queue<string> signals = new Queue<string>();
+        readonly List<IPEndPoint> punchFrom = new List<IPEndPoint>();
+        byte[] stunTx;
 
         public string Open(int port)
         {
@@ -104,6 +117,7 @@ namespace Sensensturm
                 try { s.IOControl(-1744830452, new byte[] { 0, 0, 0, 0 }, null); } catch { } // SIO_UDP_CONNRESET aus
                 s.Bind(new IPEndPoint(IPAddress.Any, port));
                 s.Blocking = false;
+                LocalPort = ((IPEndPoint)s.LocalEndPoint).Port;
                 return null;
             }
             catch (SocketException e)
@@ -117,30 +131,141 @@ namespace Sensensturm
 
         public void Send(EndPoint to, byte[] d)
         {
-            if (s == null || to == null) return;
+            if (to == null) return;
+            if (to.Equals(RelayPeer))
+            {
+                MqttRelay r = Relay;
+                if (r != null && RelayOut != null)
+                {
+                    var p = new byte[d.Length + 1];
+                    p[0] = (byte)'G';
+                    Buffer.BlockCopy(d, 0, p, 1, d.Length);
+                    r.Publish(RelayOut, p);
+                }
+                return;
+            }
+            if (s == null) return;
             try { s.SendTo(d, to); } catch { }
+        }
+
+        public void SendSignal(string msg)
+        {
+            MqttRelay r = Relay;
+            if (r == null || RelayOut == null) return;
+            byte[] t = Encoding.UTF8.GetBytes(msg);
+            var p = new byte[t.Length + 1];
+            p[0] = (byte)'S';
+            Buffer.BlockCopy(t, 0, p, 1, t.Length);
+            r.Publish(RelayOut, p);
+        }
+
+        public bool TryGetSignal(out string msg)
+        {
+            PumpRelaySignals();
+            if (signals.Count > 0) { msg = signals.Dequeue(); return true; }
+            msg = null;
+            return false;
+        }
+
+        // Signale können auch eintreffen, während niemand Spielpakete liest
+        readonly Queue<byte[]> relayGame = new Queue<byte[]>();
+        void PumpRelaySignals()
+        {
+            MqttRelay r = Relay;
+            byte[] pl;
+            while (r != null && r.TryReceive(out pl))
+            {
+                if (pl.Length == 0) continue;
+                if (pl[0] == 'S') signals.Enqueue(Encoding.UTF8.GetString(pl, 1, pl.Length - 1));
+                else if (pl[0] == 'G' && relayGame.Count < 500) relayGame.Enqueue(pl);
+            }
+        }
+
+        public void SendPunch(IPEndPoint to) { Send(to, new byte[] { (byte)'S', (byte)'Z', Pk.Version, Pk.Punch }); }
+
+        public IPEndPoint FirstPunchFrom(List<IPEndPoint> cands)
+        {
+            foreach (var p in punchFrom)
+                foreach (var c in cands)
+                    if (p.Address.Equals(c.Address)) return p;
+            return null;
+        }
+
+        public void SendStunRequest(IPEndPoint server)
+        {
+            if (stunTx == null) { stunTx = new byte[12]; new Random().NextBytes(stunTx); }
+            var req = new byte[20];
+            req[1] = 1; // Binding Request
+            req[4] = 0x21; req[5] = 0x12; req[6] = 0xA4; req[7] = 0x42;
+            Buffer.BlockCopy(stunTx, 0, req, 8, 12);
+            Send(server, req);
+        }
+
+        bool TryStun(byte[] d, int len)
+        {
+            if (len < 20 || d[0] != 0x01 || d[1] != 0x01 || d[4] != 0x21 || d[5] != 0x12 || d[6] != 0xA4 || d[7] != 0x42) return false;
+            int i = 20;
+            while (i + 4 <= len)
+            {
+                int t = d[i] * 256 + d[i + 1], l = d[i + 2] * 256 + d[i + 3];
+                if ((t == 0x20 || t == 0x01) && l >= 8 && d[i + 5] == 1 && StunResult == null)
+                {
+                    bool x = t == 0x20;
+                    int port = d[i + 6] * 256 + d[i + 7];
+                    if (x) port ^= 0x2112;
+                    var ip = new byte[4];
+                    byte[] cookie = { 0x21, 0x12, 0xA4, 0x42 };
+                    for (int k = 0; k < 4; k++) ip[k] = (byte)(x ? d[i + 8 + k] ^ cookie[k] : d[i + 8 + k]);
+                    StunResult = new IPEndPoint(new IPAddress(ip), port);
+                }
+                i += 4 + ((l + 3) & ~3);
+            }
+            return true;
         }
 
         public bool Recv(out byte[] data, out int len, out IPEndPoint from)
         {
             data = rb; len = 0; from = null;
-            if (s == null) return false;
-            try
+            for (int guard = 0; guard < 64 && s != null; guard++)
             {
-                if (s.Available <= 0) return false;
-                EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-                len = s.ReceiveFrom(rb, ref ep);
-                from = (IPEndPoint)ep;
+                try
+                {
+                    if (s.Available <= 0) break;
+                    EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
+                    len = s.ReceiveFrom(rb, ref ep);
+                    from = (IPEndPoint)ep;
+                }
+                catch (SocketException) { continue; }
+                catch (ObjectDisposedException) { return false; }
+                if (TryStun(rb, len)) continue;
+                if (len == 4 && rb[0] == 'S' && rb[1] == 'Z' && rb[3] == Pk.Punch)
+                {
+                    if (!punchFrom.Contains(from)) punchFrom.Add(from);
+                    if (AutoPunchReply) SendPunch(from);
+                    continue;
+                }
                 return true;
             }
-            catch (SocketException) { len = 0; return s != null && s.Available > 0; }
-            catch (ObjectDisposedException) { return false; }
+            PumpRelaySignals();
+            if (relayGame.Count > 0)
+            {
+                byte[] pl = relayGame.Dequeue();
+                len = Math.Min(rb.Length, pl.Length - 1);
+                Buffer.BlockCopy(pl, 1, rb, 0, len);
+                from = RelayPeer;
+                return true;
+            }
+            len = 0;
+            return false;
         }
 
         public void Close()
         {
             try { if (s != null) s.Close(); } catch { }
             s = null;
+            MqttRelay r = Relay;
+            Relay = null;
+            if (r != null) r.Close();
         }
     }
 
@@ -166,6 +291,7 @@ namespace Sensensturm
         int nextEventId = 1;
 
         public bool HasClient { get { return Client != null; } }
+        public bool OverRelay { get { return Client != null && Client.Equals(NetSocket.RelayPeer); } }
 
         public string Start(int port) { return Sock.Open(port); }
 
@@ -328,6 +454,7 @@ namespace Sensensturm
             foreach (var e in newEvents) { e.Id = nextEventId++; history.Add(e); historyTick.Add(s.tick); }
             while (historyTick.Count > 0 && historyTick[0] < s.tick - 40) { history.RemoveAt(0); historyTick.RemoveAt(0); }
             if (!HasClient) return;
+            if (OverRelay && (s.tick & 1) == 1) return; // Relay: 30 Snapshots/s genügen
             var w = Pk.Begin(Pk.Snapshot);
             w.Write(s.tick);
             w.Write(MatchId);
@@ -411,7 +538,15 @@ namespace Sensensturm
                 Error = "Ungültige IP-Adresse \"" + ip + "\". Beispiel: 192.168.0.23";
                 return;
             }
-            Host = new IPEndPoint(addr, port);
+            ConnectEndpoint(new IPEndPoint(addr, port), now);
+        }
+
+        public bool OverRelay { get { return Host != null && Host.Equals(NetSocket.RelayPeer); } }
+
+        public void ConnectEndpoint(IPEndPoint ep, double now)
+        {
+            Error = "";
+            Host = ep;
             Status = Connecting;
             connectStart = now;
             lastJoin = 0;
@@ -445,7 +580,7 @@ namespace Sensensturm
                 if (now - connectStart > 6.0)
                 {
                     Status = Failed;
-                    Error = "Keine Antwort von " + Host + ". Prüfe IP-Adresse und Port, ob der Host die Lobby geöffnet hat, ob beide PCs im selben Netzwerk sind und ob die Windows-Firewall Sensensturm erlaubt.";
+                    Error = OverRelay ? "Keine Antwort vom Host über das Relay. Ist das Online-Spiel noch geöffnet?" : "Keine Antwort von " + Host + ". Prüfe IP-Adresse und Port, ob der Host die Lobby geöffnet hat, ob beide PCs im selben Netzwerk sind und ob die Windows-Firewall Sensensturm erlaubt.";
                 }
             }
             else if (Status == Connected)

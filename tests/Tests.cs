@@ -22,6 +22,7 @@ namespace Sensensturm
             fails += TestBlock();
             fails += TestKO();
             fails += TestNetwork();
+            if (Environment.GetEnvironmentVariable("ONLINE") == "1") { fails += TestOnline(false); fails += TestOnline(true); }
             fails += TestCombos();
             fails += TestRecovery();
             Screenshots();
@@ -581,6 +582,58 @@ namespace Sensensturm
             s.p[0].x = -350;
             for (int t = 0; t < 70; t++) Sim.Step(s, new[] { Btn.Jump, 0 }, new[] { t == 0 ? Btn.Jump : 0, 0 }, ev, false);
             Check(s.p[0].onGround && s.p[0].plat == 1, "Seitliche Plattform mit einem Sprung erreichbar", ref f);
+            return f;
+        }
+
+        static int TestOnline(bool forceRelay)
+        {
+            Console.WriteLine("Online über das Internet (" + (forceRelay ? "Relay erzwungen" : "automatisch") + "):");
+            int f = 0;
+            OnlineLink.ForceRelay = forceRelay;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Func<double> now = () => sw.Elapsed.TotalSeconds;
+            string code = OnlineLink.NewCode();
+            var host = new HostSession(); host.Start(0);
+            var lh = new OnlineLink(); lh.Start(host.Sock, true, code);
+            var cl = new ClientSession(); cl.Open();
+            var lc = new OnlineLink(); lc.Start(cl.Sock, false, code);
+            double tConn = -1;
+            while (now() < 25 && cl.Status != ClientSession.Connected)
+            {
+                lh.Tick(now()); lc.Tick(now());
+                host.Poll(now()); cl.Poll(now());
+                if (lc.Decided != null && cl.Status == ClientSession.Idle) cl.ConnectEndpoint(lc.Decided, now());
+                if (lc.Error != null || lh.Error != null || cl.Status == ClientSession.Failed) break;
+                Thread.Sleep(10);
+            }
+            if (cl.Status == ClientSession.Connected) tConn = now();
+            Console.WriteLine("    Vermittlung: " + lh.RelayName + " | STUN Host " + host.Sock.StunResult + " | STUN Client " + cl.Sock.StunResult);
+            Check(cl.Status == ClientSession.Connected, "Verbunden per Raum-Code " + code + " (" + lc.Mode + ") nach " + tConn.ToString("0.0") + " s " + (lc.Error ?? lh.Error ?? cl.Error ?? ""), ref f);
+            if (cl.Status != ClientSession.Connected) { host.Close(); cl.Close(); return f; }
+            Check(forceRelay ? host.OverRelay : true, "Verbindungsart Host-Seite: " + (host.OverRelay ? "Relay" : "direkt"), ref f);
+
+            host.ResetMatch(); host.InMatch = true;
+            var hs = GameState.NewMatch(0, 1, 3, 0); hs.phase = GameState.Fight; hs.phaseTimer = 0;
+            var ev = new List<GameEvent>();
+            int snaps = 0;
+            double t0 = now();
+            for (int t = 0; t < 240; t++)
+            {
+                lh.Tick(now()); lc.Tick(now());
+                host.Poll(now()); cl.Poll(now());
+                if (cl.NewSnapshot) snaps++;
+                cl.SendInput(t < 40 ? Btn.Left : 0, t == 0 ? Btn.Left : 0);
+                int h1, p1; host.TakeInput(out h1, out p1);
+                ev.Clear();
+                Sim.Step(hs, new[] { 0, h1 }, new[] { 0, p1 }, ev, false);
+                host.SendSnapshot(hs, ev);
+                Thread.Sleep(16);
+            }
+            double secs = now() - t0;
+            Check(hs.p[1].x < 200, "Eingaben kommen beim Host an (Client-x=" + (int)hs.p[1].x + ")", ref f);
+            Check(snaps > 40, "Snapshots beim Client: " + snaps + " in " + secs.ToString("0.0") + " s (" + (snaps / secs).ToString("0") + "/s), Ping " + cl.Ping + " ms", ref f);
+            host.Close(); cl.Close();
+            OnlineLink.ForceRelay = false;
             return f;
         }
 

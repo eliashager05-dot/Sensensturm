@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Sensensturm
 {
-    public enum Scr { Main, Local, Host, Join, ClientLobby, Settings, Controls, Combos, Match }
+    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match }
     public enum Mode { Local, Host, Client }
 
     class Item
@@ -63,6 +63,10 @@ namespace Sensensturm
         readonly string[] names = new string[2];
         int hostChar;
         int comboWeapon;
+        OnlineLink link;
+        bool online;
+        string codeText = "";
+        string lastLinkError;
 
         float mouseSc = 1, mouseOx, mouseOy;
         PointF mouse;
@@ -134,14 +138,15 @@ namespace Sensensturm
             string t = GetText(editing);
             bool ok;
             int max;
-            if (editing == 0) { ok = char.IsDigit(c) || c == '.'; max = 15; }
+            if (editing == 4) { c = char.ToUpperInvariant(c); ok = OnlineLink.Alphabet.IndexOf(c) >= 0 || c == '0' || c == 'O' || c == 'I' || c == '1'; max = 6; if (c == '0') c = 'O'; if (c == '1') c = 'I'; }
+            else if (editing == 0) { ok = char.IsDigit(c) || c == '.'; max = 15; }
             else if (editing == 1 || editing == 3) { ok = char.IsDigit(c); max = 5; }
             else { ok = char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_'; max = 14; }
             if (ok && t.Length < max) SetText(editing, t + c);
         }
 
-        string GetText(int f) { return f == 0 ? ipText : f == 1 ? portText : f == 2 ? nameText : setPortText; }
-        void SetText(int f, string v) { if (f == 0) ipText = v; else if (f == 1) portText = v; else if (f == 2) nameText = v; else setPortText = v; }
+        string GetText(int f) { return f == 0 ? ipText : f == 1 ? portText : f == 2 ? nameText : f == 4 ? codeText : setPortText; }
+        void SetText(int f, string v) { if (f == 0) ipText = v; else if (f == 1) portText = v; else if (f == 2) nameText = v; else if (f == 4) codeText = v; else setPortText = v; }
 
         void FinishEdit()
         {
@@ -181,6 +186,11 @@ namespace Sensensturm
         {
             frame++;
             In.PollPads();
+            if (link != null)
+            {
+                link.Tick(Now);
+                if (link.Error != null && link.Error != lastLinkError) { lastLinkError = link.Error; Toast(link.Error, true); }
+            }
             if (host != null) host.Poll(Now);
             if (client != null) client.Poll(Now);
             if (host != null) foreach (string m in host.Messages) Toast(m, m.Contains("verloren") || m.Contains("getrennt"));
@@ -213,9 +223,16 @@ namespace Sensensturm
                 if (client.Status == ClientSession.Connected) { Go(Scr.ClientLobby); Toast("Verbunden mit " + client.HostName + ".", false); }
                 else if (client.Status == ClientSession.Failed) { Toast(client.Error, true); client.Status = ClientSession.Idle; client.RestoreTuning(); }
             }
+            if (scr == Scr.OnlineJoin && client != null && link != null)
+            {
+                if (link.Error != null) { LeaveClient(); }
+                else if (link.Decided != null && client.Status == ClientSession.Idle) client.ConnectEndpoint(link.Decided, Now);
+                else if (client.Status == ClientSession.Connected) { Go(Scr.ClientLobby); Toast("Online verbunden mit " + client.HostName + (client.OverRelay ? " (über Relay)" : " (direkt)") + ".", false); }
+                else if (client.Status == ClientSession.Failed) { Toast(client.Error, true); LeaveClient(); }
+            }
             if (scr == Scr.ClientLobby && client != null)
             {
-                if (client.Status == ClientSession.Failed) { Toast(client.Error, true); LeaveClient(); Go(Scr.Join); OpenJoin(); return; }
+                if (client.Status == ClientSession.Failed) { bool wasOnline = link != null; Toast(client.Error, true); LeaveClient(); if (wasOnline) Go(Scr.OnlineJoin); else { Go(Scr.Join); OpenJoin(); } return; }
                 if (client.NewSnapshot && client.Auth != null) { StartClientMatch(); return; }
             }
 
@@ -277,6 +294,7 @@ namespace Sensensturm
                 case Scr.Local: Go(Scr.Main); break;
                 case Scr.Host: CloseHost(); Go(Scr.Main); break;
                 case Scr.Join: LeaveClient(); Go(Scr.Main); break;
+                case Scr.OnlineJoin: LeaveClient(); Go(Scr.Main); break;
                 case Scr.ClientLobby: LeaveClient(); Go(Scr.Main); break;
                 case Scr.Settings: Settings.Save(); Go(Scr.Main); break;
                 case Scr.Controls: Settings.Save(); Go(Scr.Settings); break;
@@ -307,6 +325,8 @@ namespace Sensensturm
             {
                 case Scr.Main:
                     Add("Lokal spielen", null, () => Go(Scr.Local), null);
+                    Add("Online-Spiel erstellen", null, StartOnlineHost, null);
+                    Add("Online-Spiel beitreten", null, () => { LeaveClient(); Go(Scr.OnlineJoin); }, null);
                     Add("LAN-Spiel erstellen", null, StartHost, null);
                     Add("LAN-Spiel beitreten", null, () => { Go(Scr.Join); OpenJoin(); }, null);
                     Add("Einstellungen", null, () => { nameText = Settings.PlayerName; setPortText = Settings.Port.ToString(); Go(Scr.Settings); }, null);
@@ -329,8 +349,17 @@ namespace Sensensturm
                     Add("Leben", Settings.Stocks.ToString(), null, d => Settings.Stocks = Math.Max(1, Math.Min(9, Settings.Stocks + d)));
                     Add("Zeitlimit", MinutesText(Settings.MatchMinutes), null, d => Settings.MatchMinutes = NextMinutes(Settings.MatchMinutes, d));
                     Add(host != null && host.HasClient ? "Match starten" : "Match starten (warte auf Spieler 2)", null, StartHostMatch, null, host != null && host.HasClient);
+                    if (online) Add("Raum-Code kopieren", null, () => { try { Clipboard.SetText(link.Code); Toast("Code " + link.Code + " kopiert – schick ihn deinem Mitspieler.", false); } catch { } }, null);
                     Add("Lobby schließen", null, () => { CloseHost(); Go(Scr.Main); }, null);
                     break;
+                case Scr.OnlineJoin:
+                    {
+                        bool busy = link != null && client != null;
+                        Add("Raum-Code", editing == 4 ? codeText + (frame % 60 < 30 ? "|" : " ") : (codeText.Length > 0 ? codeText : "(eingeben)"), null, null, !busy, 4);
+                        Add(busy ? "Verbinde ..." : "Verbinden", null, ConnectOnline, null, !busy);
+                        Add("Zurück", null, () => { LeaveClient(); Go(Scr.Main); }, null);
+                        break;
+                    }
                 case Scr.Join:
                     {
                         bool busy = client != null && client.Status == ClientSession.Connecting;
@@ -438,13 +467,44 @@ namespace Sensensturm
             host = new HostSession();
             string err = host.Start(Settings.Port);
             if (err != null) { host = null; Toast(err, true); return; }
+            online = false;
             Go(Scr.Host);
+        }
+
+        void StartOnlineHost()
+        {
+            CloseHost();
+            LeaveClient();
+            host = new HostSession();
+            string err = host.Start(0);
+            if (err != null) { host = null; Toast(err, true); return; }
+            online = true;
+            lastLinkError = null;
+            link = new OnlineLink();
+            link.Start(host.Sock, true, OnlineLink.NewCode());
+            Go(Scr.Host);
+        }
+
+        void ConnectOnline()
+        {
+            if (editing >= 0) FinishEdit();
+            string code = codeText.Trim().ToUpperInvariant();
+            if (code.Length != 6) { Toast("Der Raum-Code hat 6 Zeichen (z. B. K7M2QX).", true); return; }
+            LeaveClient();
+            client = new ClientSession();
+            client.WantChar = Settings.P1Char;
+            string err = client.Open();
+            if (err != null) { Toast(err, true); client = null; return; }
+            lastLinkError = null;
+            link = new OnlineLink();
+            link.Start(client.Sock, false, code);
         }
 
         void CloseHost()
         {
             if (host != null) host.Close();
             host = null;
+            if (client == null) link = null;
         }
 
         void OpenJoin()
@@ -472,6 +532,7 @@ namespace Sensensturm
         {
             if (client != null) client.Close();
             client = null;
+            if (host == null) link = null;
         }
 
         // ================================================================ Match-Start
@@ -707,8 +768,8 @@ namespace Sensensturm
             if (Settings.ShowStats)
             {
                 string st = Fps + " FPS";
-                if (host != null) st += host.HasClient ? "  ·  Host  ·  Ping " + (host.Ping >= 0 ? host.Ping + " ms" : "-") : "  ·  Host  ·  kein Client";
-                if (client != null && client.Status == ClientSession.Connected) st += "  ·  Client  ·  Ping " + (client.Ping >= 0 ? client.Ping + " ms" : "-");
+                if (host != null) st += host.HasClient ? (host.OverRelay ? "  ·  Online-Relay" : online ? "  ·  Online direkt" : "") + "  ·  Host  ·  Ping " + (host.Ping >= 0 ? host.Ping + " ms" : "-") : "  ·  Host  ·  kein Client";
+                if (client != null && client.Status == ClientSession.Connected) st += (client.OverRelay ? "  ·  Online-Relay" : "") + "  ·  Client  ·  Ping " + (client.Ping >= 0 ? client.Ping + " ms" : "-");
                 using (var b = new SolidBrush(Color.FromArgb(170, 220, 210, 240))) g.DrawString(st, R.FTiny, b, Renderer.VW - g.MeasureString(st, R.FTiny).Width - 10, 6);
             }
 
@@ -815,7 +876,7 @@ namespace Sensensturm
                     DrawTitle(g, "Ein Plattform-Kampfspiel mit Sensen und Schilden");
                     R.DrawPortrait(g, 0, 210, 600, 2.1f, frame, false);
                     R.DrawPortrait(g, 1, 1070, 600, -2.1f, frame + 40, false);
-                    DrawItems(g, 400, 210, 480, 58, 14);
+                    DrawItems(g, 400, 190, 480, 50, 9);
                     Line(g, "Steuerung: Pfeiltasten/WASD · Enter/Leertaste · Esc  —  oder Maus / Controller", 350, 690, dim, R.FTiny);
                     break;
                 case Scr.Local:
@@ -831,6 +892,23 @@ namespace Sensensturm
                     break;
                 case Scr.Host:
                     {
+                        if (online && link != null)
+                        {
+                            DrawTitle(g, "Online-Spiel erstellen");
+                            Panel(g, 330, 150, 620, 215);
+                            Line(g, "Raum-Code für deinen Mitspieler:", 350, 160, dim);
+                            R.Shadowed(g, link.Code, R.FTitle, Color.FromArgb(255, 235, 160), 640, 178, true);
+                            Line(g, link.StatusText, 350, 262, link.Error != null ? Color.FromArgb(255, 130, 130) : link.RelayState == 1 ? good : warn, R.FTiny);
+                            Line(g, "Mitspieler: \"Online-Spiel beitreten\" und diesen Code eingeben.", 350, 284, info, R.FTiny);
+                            if (host != null && host.HasClient)
+                                Line(g, "• " + host.ClientName + " verbunden (" + (host.OverRelay ? "Relay" : "direkt") + ") · " + (host.Ping >= 0 ? host.Ping + " ms" : "..."), 350, 312, good, R.FMed);
+                            else
+                                Line(g, (frame % 60 < 40 ? "• " : "   ") + "Warte auf Mitspieler ...", 350, 312, warn, R.FMed);
+                            DrawItems(g, 330, 385, 620, 50, 10);
+                            DrawCharCard(g, hostChar, 20, 150, "DU (HOST)", false);
+                            if (host != null && host.HasClient) DrawCharCard(g, host.ClientChar, 960, 150, host.ClientName.ToUpper(), true);
+                            break;
+                        }
                         DrawTitle(g, "LAN-Spiel erstellen");
                         Panel(g, 330, 150, 620, 215);
                         List<string> ips = NetUtil.LocalIPs();
@@ -858,6 +936,19 @@ namespace Sensensturm
                         else if (client != null && client.Found.Count == 0)
                             Line(g, "Suche nach Lobbys im lokalen Netzwerk ...", 450, y, dim);
                         Line(g, "Tipp: Die IP-Adresse wird beim Host unter \"LAN-Spiel erstellen\" angezeigt. Beide PCs müssen im selben WLAN/LAN sein.", 190, 650, dim, R.FTiny);
+                        break;
+                    }
+                case Scr.OnlineJoin:
+                    {
+                        DrawTitle(g, "Online-Spiel beitreten");
+                        DrawItems(g, 330, 180, 620, 52, 10);
+                        if (link != null && client != null)
+                            R.Shadowed(g, client.Status == ClientSession.Connecting ? "Verbinde mit dem Host (" + link.Mode + ") ..." : link.StatusText, R.FMed, warn, Renderer.VW / 2f, 390, true);
+                        Panel(g, 230, 470, 820, 120);
+                        Line(g, "Funktioniert über das Internet – ihr müsst NICHT im selben Netzwerk sein.", 250, 482, info, R.FTiny);
+                        Line(g, "Der Host wählt \"Online-Spiel erstellen\" und schickt dir den 6-stelligen Raum-Code.", 250, 504, info, R.FTiny);
+                        Line(g, "Zuerst wird eine Direktverbindung versucht; klappt das nicht (strenge Firewall/NAT),", 250, 526, dim, R.FTiny);
+                        Line(g, "läuft das Spiel automatisch über einen Vermittlungsserver (etwas höhere Verzögerung).", 250, 548, dim, R.FTiny);
                         break;
                     }
                 case Scr.ClientLobby:
