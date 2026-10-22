@@ -86,6 +86,7 @@ namespace Sensensturm
     public class GameState
     {
         public int tick, phase, phaseTimer, timeLeft, winner = -1, stocks;
+        public int stage; // nur Optik (StageDef), wird mit dem Snapshot an den Client übertragen
         public PlayerState[] p = new PlayerState[2];
 
         public const int Countdown = 0, Fight = 1, Over = 2;
@@ -97,10 +98,11 @@ namespace Sensensturm
             return g;
         }
 
-        public static GameState NewMatch(int char0, int char1, int stocks, int minutes)
+        public static GameState NewMatch(int char0, int char1, int stocks, int minutes, int stage = 0)
         {
             var s = new GameState();
             s.stocks = stocks;
+            s.stage = StageDef.Valid(stage);
             s.phase = Countdown;
             s.phaseTimer = 180;
             s.timeLeft = minutes > 0 ? minutes * 3600 : -1;

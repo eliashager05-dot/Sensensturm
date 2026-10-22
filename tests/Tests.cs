@@ -25,6 +25,7 @@ namespace Sensensturm
             if (Environment.GetEnvironmentVariable("ONLINE") == "1") { fails += TestOnline(false); fails += TestOnline(true); }
             fails += TestCombos();
             fails += TestRecovery();
+            fails += TestStages();
             Screenshots();
             Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
         }
@@ -637,8 +638,26 @@ namespace Sensensturm
             return f;
         }
 
+        static int TestStages()
+        {
+            Console.WriteLine("Arenen:");
+            int fails = 0;
+            for (int st = 0; st < StageDef.Count; st++)
+            {
+                var s = GameState.NewMatch(0, 3, 3, 0, st);
+                var ms = new System.IO.MemoryStream();
+                s.Write(new System.IO.BinaryWriter(ms));
+                ms.Position = 0;
+                var back = GameState.Read(new System.IO.BinaryReader(ms));
+                Check(back.stage == st, StageDef.Names[st] + " wird im Snapshot übertragen", ref fails);
+            }
+            Check(GameState.NewMatch(0, 1, 3, 0, 99).stage == StageDef.Graveyard, "Ungültige Arena fällt auf den Mondfriedhof zurück", ref fails);
+            return fails;
+        }
+
         static void Shot(Renderer r, GameState s, string name, string[] names)
         {
+            r.Stage = s.stage;
             using (var bmp = new Bitmap(1280, 720))
             using (var g = Graphics.FromImage(bmp))
             {
@@ -706,6 +725,8 @@ namespace Sensensturm
                 r.Tick(); r.UpdateCamera(s);
             }
             Shot(r, s, "shot_new1", new[] { "Brokk", "Lyra" });
+            for (int st = 1; st < StageDef.Count; st++) { s.stage = st; Shot(r, s, "shot_stage" + st, new[] { "Brokk", "Lyra" }); }
+            s.stage = 0;
             for (int t = 0; t < 22; t++)
             {
                 ev.Clear();

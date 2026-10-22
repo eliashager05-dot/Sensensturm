@@ -205,6 +205,7 @@ namespace Sensensturm
         public static int MatchMinutes = 5;
         public static int P1Char = 0;
         public static int P2Char = 1;
+        public static int Stage = 0;    // Arena, siehe StageDef
         public static int Opponent = 0; // 0 = Spieler 2, 1..3 = CPU leicht/mittel/schwer, 4 = Trainingspuppe
         public static int BindVersion = 2;
 
@@ -277,6 +278,7 @@ namespace Sensensturm
             if (fileBindVersion < 2) { DefaultBindings(0); DefaultBindings(1); }
             BindVersion = 2;
             if (Opponent < 0 || Opponent > 4) Opponent = 0;
+            Stage = StageDef.Valid(Stage);
             if (P1Char < 0 || P1Char >= CharDef.Count) P1Char = 0;
             if (P2Char < 0 || P2Char >= CharDef.Count || P2Char == P1Char) P2Char = CharDef.Next(P1Char, 1, P1Char);
             Volume = Math.Max(0, Math.Min(10, Volume));
