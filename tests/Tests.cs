@@ -25,9 +25,10 @@ namespace Sensensturm
             if (Environment.GetEnvironmentVariable("ONLINE") == "1") { fails += TestOnline(false); fails += TestOnline(true); }
             fails += TestCombos();
             fails += TestNewMoves();
+            fails += TestTournament();
             fails += TestRecovery();
             fails += TestStages();
-            Screenshots();
+            fails += Screenshots();
             Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
         }
 
@@ -675,6 +676,70 @@ namespace Sensensturm
             return f;
         }
 
+        static int TestTournament()
+        {
+            Console.WriteLine("Turnier:");
+            int f = 0;
+            var rng = new Random(5);
+            bool treeOk = true;
+            string why = "";
+            for (int n = 2; n <= Tournament.MaxPlayers; n++)
+            {
+                var t = new Tournament();
+                for (int i = 0; i < n; i++) t.E.Add(new Entrant { Name = "T" + i, Char = i % CharDef.Count, Cpu = 2 });
+                t.Build(rng, 0);
+                int byes = 0, placed = 0;
+                var seen = new HashSet<int>();
+                for (int i = 0; i < t.Size; i++)
+                {
+                    int v = t.Slot[0][i];
+                    if (v == Tournament.Bye) byes++;
+                    else if (v >= 0 && seen.Add(v)) placed++;
+                }
+                for (int m = 0; m < t.Size / 2; m++)
+                {
+                    bool pairOk = t.Slot[0][2 * m] >= 0 || t.Slot[0][2 * m + 1] >= 0;
+                    bool byeAdvanced = t.Slot[0][2 * m + 1] != Tournament.Bye || t.Slot[1][m] == t.Slot[0][2 * m];
+                    if (!pairOk || !byeAdvanced) { treeOk = false; why = "n=" + n + " Paarung " + m; }
+                }
+                if (t.Size < n || t.Size >= 2 * n || byes != t.Size - n || placed != n) { treeOk = false; why = "n=" + n + " Size " + t.Size + " Freilose " + byes; }
+            }
+            Check(treeOk, "Turnierbaum für 2 bis 16 Teilnehmer: alle gesetzt, Freilose korrekt verteilt und weitergereicht" + (treeOk ? "" : " (" + why + ")"), ref f);
+
+            // komplettes CPU-Turnier mit 16 Teilnehmern
+            {
+                var t = new Tournament { Stocks = 2, Minutes = 2 };
+                for (int i = 0; i < 16; i++) t.E.Add(new Entrant { Name = Tournament.CpuName(i), Char = i % CharDef.Count, Cpu = 1 + i % 3 });
+                t.Build(rng, 0);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                int matches = 0, r, m;
+                while (t.NextMatch(out r, out m)) { t.Advance(r, m, t.Simulate(r, m, rng), 0); matches++; }
+                int outCount = 0;
+                for (int i = 0; i < 16; i++) if (t.OutTime[i] >= 0) outCount++;
+                Check(t.Done && matches == 15 && outCount == 15 && t.Champion >= 0,
+                    "16 CPUs: 15 Matches ausgerechnet, Sieger " + (t.Champion >= 0 ? t.E[t.Champion].Name : "?") + " (" + sw.ElapsedMilliseconds + " ms)", ref f);
+            }
+            // 5 Teilnehmer: 3 Freilose, 4 echte Matches
+            {
+                var t = new Tournament { Stocks = 1, Minutes = 2 };
+                for (int i = 0; i < 5; i++) t.E.Add(new Entrant { Name = "T" + i, Char = i % CharDef.Count, Cpu = 3 });
+                t.Build(rng, 0);
+                int matches = 0, r, m;
+                while (t.NextMatch(out r, out m)) { t.Advance(r, m, t.Simulate(r, m, rng), 0); matches++; }
+                Check(t.Done && t.Size == 8 && matches == 4, "5 Teilnehmer: Baum mit 8 Plätzen, 4 Matches bis zum Sieger", ref f);
+            }
+            // Gleichstand: Los entscheidet, Leben und Schaden zuerst
+            {
+                var s = GameState.NewMatch(0, 1, 3, 1);
+                s.p[1].stocks = 2;
+                bool a = Tournament.WinnerOf(s, rng) == 0;
+                s.p[1].stocks = 3; s.p[0].damage = 80; s.p[1].damage = 20;
+                bool b = Tournament.WinnerOf(s, rng) == 1;
+                Check(a && b, "Sieger nach Zeitablauf: erst Leben, dann Schaden", ref f);
+            }
+            return f;
+        }
+
         static int TestRecovery()
         {
             Console.WriteLine("Rettung nach Rauswurf:");
@@ -790,7 +855,7 @@ namespace Sensensturm
             }
         }
 
-        static void Screenshots()
+        static int Screenshots()
         {
             var r = new Renderer();
             var s = Fresh();
@@ -891,6 +956,33 @@ namespace Sensensturm
             for (int i = 0; i < 3; i++) game.Tick();
             using (var bmp = new Bitmap(1280, 720))
             using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, "shot_comboview.png"), ImageFormat.Png); }
+            // Turnier: Setup, Einflug, laufende Animation, Siegerehrung
+            Action<string> shotGame = name =>
+            {
+                using (var bmp = new Bitmap(1280, 720))
+                using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, name + ".png"), ImageFormat.Png); }
+            };
+            game.DebugScreen(Scr.TourneySetup);
+            for (int i = 0; i < 3; i++) game.Tick();
+            shotGame("shot_tour_setup");
+            game.DebugTournament(12, true, 40);
+            shotGame("shot_tour_intro");
+            game.DebugFrames(420);
+            shotGame("shot_tour_mid");
+            game.DebugFrames(14);
+            shotGame("shot_tour_anim");
+            game.DebugTournament(2, false, 60);
+            string champ = game.DebugPlayTourMatch(1);
+            int sf = 0;
+            Check(champ == "Spieler 1", "Turnier im Spiel: Match gespielt, Sieger \"" + champ + "\" in den Baum übernommen", ref sf);
+            game.DebugTournament(6, false, 160);
+            shotGame("shot_tour_human");
+            game.DebugFinishTournament();
+            game.DebugFrames(16);
+            shotGame("shot_tour_final_anim");
+            game.DebugFrames(140);
+            shotGame("shot_tour_champion");
+            return sf;
         }
     }
 }

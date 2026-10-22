@@ -27,6 +27,16 @@ Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensenst
 
 Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 
+## Turnier (bis zu 16 Spieler)
+Im Hauptmenü **Turnier** wählen:
+1. **Teilnehmer** (2–16), **Leben**, **Zeitlimit** und **Arena** (fest oder zufällig je Match) einstellen.
+2. Für jeden Teilnehmer per Enter/Klick zwischen **Mensch** und **CPU** (leicht/mittel/schwer) wechseln, mit Links/Rechts den Kämpfer wählen.
+3. **Turnier starten!** Die Paarungen werden ausgelost. Bei Teilnehmerzahlen ohne Zweierpotenz ziehen einige Teilnehmer per **Freilos** direkt in die zweite Runde ein.
+
+Gespielt wird im K.-o.-System, alle Menschen nacheinander am selben PC: Gegen die CPU gelten die Tasten von Spieler 1, bei Mensch gegen Mensch die Belegungen von Spieler 1 und 2. Kämpfe **CPU gegen CPU** werden wahlweise automatisch ausgerechnet oder angeschaut. Endet ein Match nach Zeitablauf unentschieden, entscheiden Leben, dann Schaden, dann das Los.
+
+Der **Turnierbaum** ist animiert. Die Teilnehmer fliegen nacheinander ein, die Linie des Siegers läuft leuchtend in die nächste Runde, wo sein Name aufploppt, und Verlierer werden ausgegraut und durchgestrichen. Das nächste Match pulsiert mit einer VS-Marke. Am Ende gibt es eine Siegerehrung mit Pokal und Konfetti. Ein laufendes Turnier lässt sich verlassen und im Hauptmenü mit **Turnier fortsetzen** wieder aufnehmen, solange das Spiel offen bleibt.
+
 ## Online-Spiel (über das Internet, verschiedene Netzwerke)
 1. Host: **Online-Spiel erstellen**. Es erscheint ein 6-stelliger **Raum-Code** (mit „Raum-Code kopieren“ in die Zwischenablage).
 2. Mitspieler: **Online-Spiel beitreten**, Code eingeben, **Verbinden**.

@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Sensensturm
 {
-    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match }
+    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney }
     public enum Mode { Local, Host, Client }
 
     class Item
@@ -21,7 +21,7 @@ namespace Sensensturm
         public bool Small;
     }
 
-    public class Game
+    public partial class Game
     {
         public bool Running = true;
         public readonly InputManager In = new InputManager();
@@ -240,6 +240,7 @@ namespace Sensensturm
                 if (client.NewSnapshot && client.Auth != null) { StartClientMatch(); return; }
             }
 
+            if (scr == Scr.Tourney) TickTourney();
             BuildItems();
             HandleMenu();
         }
@@ -303,6 +304,8 @@ namespace Sensensturm
                 case Scr.Settings: Settings.Save(); Go(Scr.Main); break;
                 case Scr.Controls: Settings.Save(); Go(Scr.Settings); break;
                 case Scr.Combos: Go(Scr.Settings); break;
+                case Scr.TourneySetup: Go(Scr.Main); break;
+                case Scr.Tourney: Go(Scr.Main); break;
             }
         }
 
@@ -329,6 +332,8 @@ namespace Sensensturm
             {
                 case Scr.Main:
                     Add("Lokal spielen", null, () => Go(Scr.Local), null);
+                    Add("Turnier (bis 16 Spieler)", null, () => Go(Scr.TourneySetup), null);
+                    if (tour != null && !tour.Done) Add("Turnier fortsetzen", null, () => Go(Scr.Tourney), null);
                     Add("Online-Spiel erstellen", null, StartOnlineHost, null);
                     Add("Online-Spiel beitreten", null, () => { LeaveClient(); Go(Scr.OnlineJoin); }, null);
                     Add("LAN-Spiel erstellen", null, StartHost, null);
@@ -417,6 +422,12 @@ namespace Sensensturm
                     }
                     Add("Standard wiederherstellen", null, () => Settings.DefaultBindings(ctrlPlayer), null);
                     Add("Zurück", null, () => { Settings.Save(); Go(Scr.Settings); }, null);
+                    break;
+                case Scr.TourneySetup:
+                    BuildTourneySetupItems();
+                    break;
+                case Scr.Tourney:
+                    BuildTourneyItems();
                     break;
                 case Scr.Combos:
                     Add("Waffe", Weapon.Names[comboWeapon], null, d => comboWeapon = ((comboWeapon + d) % 3 + 3) % 3);
@@ -549,6 +560,7 @@ namespace Sensensturm
             paused = false;
             pauseSel = 0;
             resultsShown = false;
+            comboView = false;
             R.ClearFx();
             R.SnapCamera(state);
             scr = Scr.Match;
@@ -560,6 +572,8 @@ namespace Sensensturm
         {
             mode = Mode.Local;
             bot = Settings.Opponent > 0 ? new Bot(Settings.Opponent == 4 ? 0 : Settings.Opponent) : null;
+            bot0 = null;
+            tourMatch = false;
             names[0] = "Spieler 1";
             names[1] = Settings.Opponent == 4 ? "Trainingspuppe" : bot != null ? "CPU" : "Spieler 2";
             BeginMatch(GameState.NewMatch(Settings.P1Char, Settings.P2Char, Settings.Stocks, Settings.MatchMinutes, Settings.Stage));
@@ -570,6 +584,7 @@ namespace Sensensturm
         {
             if (host == null || !host.HasClient) return;
             mode = Mode.Host;
+            tourMatch = false; bot0 = null;
             host.ResetMatch();
             host.InMatch = true;
             names[0] = Settings.PlayerName;
@@ -583,6 +598,7 @@ namespace Sensensturm
         void StartClientMatch()
         {
             mode = Mode.Client;
+            tourMatch = false; bot0 = null;
             names[0] = client.HostName;
             names[1] = Settings.PlayerName;
             client.NewMatch = false;
@@ -650,17 +666,12 @@ namespace Sensensturm
             {
                 case Mode.Local:
                     if (paused || comboView) return; // lokal pausiert die Combo-Übersicht das Spiel
-                    if (bot == null)
-                    {
-                        In.Sample(0, In.PadIndex(0), out h0, out p0);
-                        In.Sample(1, In.PadIndex(1), out h1, out p1);
-                    }
-                    else
-                    {
-                        In.Sample(-1, In.PadIndex(0), out h0, out p0);
-                        bot.Think(state, 1, out h1, out p1);
-                    }
-                    if (menuOpen) { h0 = p0 = 0; if (bot == null) h1 = p1 = 0; }
+                    // Spielerplatz 0: CPU (nur Turnier, CPU gegen CPU) oder Mensch; mit CPU-Gegner gelten beide Tastenbelegungen
+                    if (bot0 != null) bot0.Think(state, 0, out h0, out p0);
+                    else In.Sample(bot == null ? 0 : -1, In.PadIndex(0), out h0, out p0);
+                    if (bot != null) bot.Think(state, 1, out h1, out p1);
+                    else In.Sample(1, In.PadIndex(1), out h1, out p1);
+                    if (menuOpen) { if (bot0 == null) h0 = p0 = 0; if (bot == null) h1 = p1 = 0; }
                     Sim.Step(state, new[] { h0, h1 }, new[] { p0, p1 }, evs, false);
                     foreach (GameEvent e in evs) R.OnEvent(e, state);
                     break;
@@ -708,7 +719,9 @@ namespace Sensensturm
             items.Clear();
             if (over)
             {
-                if (mode == Mode.Local)
+                if (tourMatch)
+                    Add("Weiter zum Turnierbaum", null, TourMatchDone, null);
+                else if (mode == Mode.Local)
                 {
                     Add("Revanche", null, StartLocal, null);
                     Add("Hauptmenü", null, () => { state = null; Go(Scr.Main); }, null);
@@ -727,7 +740,13 @@ namespace Sensensturm
             {
                 Add("Weiter", null, () => paused = false, null);
                 Add("Combos ansehen (F1)", null, OpenComboView, null);
-                if (mode == Mode.Local)
+                if (tourMatch)
+                {
+                    if (bot0 != null) Add("Match überspringen (ausrechnen)", null, () => { int r = tourR, m = tourM; LeaveTourMatch(); tour.Advance(r, m, tour.Simulate(r, m, tourRng), frame + 20); }, null);
+                    Add("Match neu starten", null, () => StartTourMatch(), null);
+                    Add("Zum Turnierbaum (später spielen)", null, LeaveTourMatch, null);
+                }
+                else if (mode == Mode.Local)
                 {
                     Add("Neustart", null, StartLocal, null);
                     Add("Hauptmenü", null, () => { state = null; Go(Scr.Main); }, null);
@@ -784,7 +803,7 @@ namespace Sensensturm
                 R.DrawWorld(g, state, Settings.ShowHitboxes);
                 // Ultimate-Taste nur für Spieler an diesem PC anzeigen
                 bool twoLocal = mode == Mode.Local && bot == null;
-                R.UltKeys[0] = mode == Mode.Client ? "" : K(Btn.UltIndex, 0);
+                R.UltKeys[0] = mode == Mode.Client || bot0 != null ? "" : K(Btn.UltIndex, 0);
                 R.UltKeys[1] = mode == Mode.Client ? K(Btn.UltIndex, 0) : twoLocal ? K(Btn.UltIndex, 1) : "";
                 R.DrawHud(g, state, names);
                 if (state.phase == GameState.Countdown && !comboView)
@@ -916,7 +935,7 @@ namespace Sensensturm
                     DrawTitle(g, "Ein Plattform-Kampfspiel mit Sensen und Schilden");
                     R.DrawPortrait(g, 0, 210, 600, 2.1f, frame, false);
                     R.DrawPortrait(g, 1, 1070, 600, -2.1f, frame + 40, false);
-                    DrawItems(g, 400, 190, 480, 50, 9);
+                    DrawItems(g, 400, 182, 480, 44, 7);
                     Line(g, "Steuerung: Pfeiltasten/WASD · Enter/Leertaste · Esc  —  oder Maus / Controller", 350, 690, dim, R.FTiny);
                     break;
                 case Scr.Local:
@@ -1015,6 +1034,12 @@ namespace Sensensturm
                     break;
                 case Scr.Combos:
                     DrawCombos(g);
+                    break;
+                case Scr.TourneySetup:
+                    DrawTourneySetup(g);
+                    break;
+                case Scr.Tourney:
+                    DrawTourney(g);
                     break;
                 case Scr.Controls:
                     DrawTitle(g, "Steuerung Spieler " + (ctrlPlayer + 1));
@@ -1180,6 +1205,11 @@ namespace Sensensturm
                 hc = CharDef.All[state.p[state.winner].charId].Glow;
             }
             R.Shadowed(g, head, R.FTitle, hc, Renderer.VW / 2f, 70, true);
+            if (tourMatch && tour != null && state.winner >= 0)
+            {
+                string next = tourR + 1 >= tour.Rounds ? "GEWINNT DAS TURNIER!" : "zieht ins " + Tournament.RoundName(tour.Size, tourR + 1) + " ein!";
+                R.Shadowed(g, next, R.FMed, Color.FromArgb(255, 225, 140), Renderer.VW / 2f, 424, true);
+            }
             if (state.winner >= 0) R.DrawPortrait(g, state.p[state.winner].charId, Renderer.VW / 2f, 400, 1.6f, frame, true);
             for (int i = 0; i < 2; i++)
             {

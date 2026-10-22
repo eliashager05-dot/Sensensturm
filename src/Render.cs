@@ -1899,6 +1899,12 @@ namespace Sensensturm
             using (var b = new SolidBrush(Color.FromArgb(120, 6, 2, 14))) g.FillRectangle(b, 0, 0, VW, VH);
         }
 
+        // kleiner Kopf als Symbol (Turnierbaum), alpha 0..1
+        public void DrawHeadIcon(Graphics g, int ch, float x, float y, float scale, float alpha = 1f)
+        {
+            DrawHead(g, GetStyle(ch, 0, alpha), CharDef.All[ch].Body, new PointF(x, y), 0, scale, 0.6f, false);
+        }
+
         public void DrawPortrait(Graphics g, int ch, float x, float y, float scale, int animFrame, bool attackPose)
         {
             var p = new PlayerState { charId = ch, anim = animFrame, facing = 1, onGround = true, state = St.Idle };
