@@ -652,6 +652,22 @@ namespace Sensensturm
                 Check(back.stage == st, StageDef.Names[st] + " wird im Snapshot übertragen", ref fails);
             }
             Check(GameState.NewMatch(0, 1, 3, 0, 99).stage == StageDef.Graveyard, "Ungültige Arena fällt auf den Mondfriedhof zurück", ref fails);
+            // auf jeder Schwebeplattform jeder Arena kann man landen
+            for (int st = 0; st < StageDef.Count; st++)
+            {
+                SoftPlat[] plats = Arena.SoftOf(st);
+                for (int i = 0; i < plats.Length; i++)
+                {
+                    var s = GameState.NewMatch(0, 3, 3, 0, st);
+                    s.phase = GameState.Fight; s.phaseTimer = 0;
+                    PlayerState P = s.p[0];
+                    P.x = (plats[i].L + plats[i].R) / 2; P.y = plats[i].Y - 120; P.onGround = false; P.plat = -1; P.state = St.Air;
+                    s.p[1].x = 900; s.p[1].y = -900;
+                    for (int t = 0; t < 90; t++) Sim.Step(s, new[] { 0, 0 }, new[] { 0, 0 }, null, false);
+                    Check(P.onGround && Math.Abs(P.y - plats[i].Y) < 1, StageDef.Names[st] + ": Landung auf Plattform " + (i + 1) + " (y=" + P.y + ")", ref fails);
+                }
+            }
+            Arena.Use(StageDef.Graveyard);
             return fails;
         }
 

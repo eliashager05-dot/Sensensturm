@@ -23,7 +23,18 @@ namespace Sensensturm
     public static class Arena
     {
         public static readonly Box Main = new Box(-640, 0, 640, 300);
-        public static readonly SoftPlat[] Soft = { new SoftPlat(-480, -230, -185), new SoftPlat(230, 480, -185), new SoftPlat(-125, 125, -360) };
+        // Schwebeplattformen je Arena (StageDef). Die Werte der Bild-Arenen sind aus den Hintergrundbildern ausgemessen.
+        static readonly SoftPlat[][] Layouts =
+        {
+            new[] { new SoftPlat(-480, -230, -185), new SoftPlat(230, 480, -185), new SoftPlat(-125, 125, -360) }, // Mondfriedhof
+            new[] { new SoftPlat(-637, -294, -305), new SoftPlat(405, 696, -305) },                               // Kirschblütental
+            new[] { new SoftPlat(-536, -239, -179), new SoftPlat(248, 542, -179) },                               // Herbsttempel
+            new[] { new SoftPlat(-575, -244, -175), new SoftPlat(265, 607, -175) },                               // Sternenhain
+        };
+        // Plattformen der laufenden Arena, wird von Sim.Step aus dem Spielzustand gesetzt
+        public static SoftPlat[] Soft = Layouts[0];
+        public static SoftPlat[] SoftOf(int stage) { return Layouts[StageDef.Valid(stage)]; }
+        public static void Use(int stage) { Soft = SoftOf(stage); }
         public const float BlastL = -1600, BlastR = 1600, BlastT = -1250, BlastB = 950;
         public const float HalfW = 18, Height = 92;
     }
@@ -230,6 +241,7 @@ namespace Sensensturm
         public static void Step(GameState s, int[] held, int[] pressed, List<GameEvent> events, bool predict)
         {
             evs = events;
+            Arena.Use(s.stage);
             s.tick++;
             if (s.phase == GameState.Countdown)
             {
