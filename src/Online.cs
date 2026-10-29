@@ -125,9 +125,11 @@ namespace Sensensturm
             alive = false;
         }
 
+        int subId;
         public void Subscribe(string topic)
         {
-            var b = new List<byte> { 0, 1 };
+            subId++; // jede Anmeldung braucht eine eigene Paketnummer (Clients melden zwei Themen an)
+            var b = new List<byte> { (byte)(subId >> 8), (byte)subId };
             AddStr(b, topic);
             b.Add(0);
             try { WritePacket(0x82, b.ToArray()); } catch { Fail(); }
@@ -208,9 +210,9 @@ namespace Sensensturm
             sock = s;
             IsHost = host;
             Code = code;
-            string b = "sensensturm/eh05/v" + Pk.Version + "/" + code;
-            sock.RelayIn = b + (host ? "/h" : "/c");
-            sock.RelayOut = b + (host ? "/c" : "/h");
+            sock.RelayBase = "sensensturm/eh05/v" + Pk.Version + "/" + code;
+            sock.RelayHost = host;
+            lock (rng) sock.RelayId = rng.Next(2, 65536); // Kennung für eigene Relay-Pakete (mehrere Clients je Raum)
             sock.AutoPunchReply = host;
             new Thread(() =>
             {
@@ -229,7 +231,7 @@ namespace Sensensturm
                 string err;
                 if (r.Connect(out err))
                 {
-                    r.Subscribe(sock.RelayIn);
+                    foreach (string t in sock.RelayTopics) r.Subscribe(t);
                     sock.Relay = r;
                     RelayState = 1;
                 }

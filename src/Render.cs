@@ -1896,7 +1896,7 @@ namespace Sensensturm
             DrawArena(g);
             DrawDecor(g);
             g.Restore(gs);
-            using (var b = new SolidBrush(Color.FromArgb(120, 6, 2, 14))) g.FillRectangle(b, 0, 0, VW, VH);
+            using (var b = new SolidBrush(Color.FromArgb(170, 6, 2, 14))) g.FillRectangle(b, 0, 0, VW, VH);
         }
 
         // kleiner Kopf als Symbol (Turnierbaum), alpha 0..1
@@ -1914,6 +1914,28 @@ namespace Sensensturm
             g.TranslateTransform(x, y);
             g.ScaleTransform(scale, Math.Abs(scale));
             using (var b = new SolidBrush(A(CharDef.Look(ch, skin).Glow, 0.12f))) g.FillEllipse(b, -75, -135, 150, 150);
+            DrawFighterPose(g, p, pose, 0, 0, 1, true, 0, 1f, false);
+            g.Restore(gs);
+        }
+
+        // Siegerpose: reißt die Waffe hoch (Endpose des Aufwärtsschlags) und wippt danach leicht; t = Frames seit Beginn
+        public void DrawVictory(Graphics g, int ch, float x, float y, float scale, int t, int skin = 0)
+        {
+            var p = new PlayerState { charId = ch, skin = skin, anim = t, facing = 1, onGround = true, state = St.Idle };
+            float k = Math.Min(1f, t / 18f);
+            k = 1 - (1 - k) * (1 - k);
+            // Jägerin: Bogen hoch über den Kopf (ihr Aufwärtsangriff ist ein Tritt)
+            Pose up = CharDef.All[ch].Body == Body.Huntress ? new Pose(-3, 0, -14, -78, -100, 112, 68, 82, 96, 100, 92, -95) : Attacks.SetOf(ch)[Attacks.UHeavy].Strike;
+            Pose pose = Pose.Lerp(Anim.Idle(p), up, k);
+            pose.Spin = 0;
+            float bob = (float)Math.Sin(t * 0.09f);
+            pose.Lean = Math.Max(-6, Math.Min(6, pose.Lean)) + bob * 2;
+            pose.Crouch = Math.Max(0, pose.Crouch * 0.4f + 2 + bob * 2);
+            pose.LF1 = 82; pose.LF2 = 96; pose.LB1 = 100; pose.LB2 = 92; // fester Stand
+            var gs = g.Save();
+            g.TranslateTransform(x, y);
+            g.ScaleTransform(scale, Math.Abs(scale));
+            using (var b = new SolidBrush(A(CharDef.Look(ch, skin).Glow, 0.16f))) g.FillEllipse(b, -85, -150, 170, 170);
             DrawFighterPose(g, p, pose, 0, 0, 1, true, 0, 1f, false);
             g.Restore(gs);
         }
