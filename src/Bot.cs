@@ -7,7 +7,9 @@ namespace Sensensturm
     {
         readonly Random rng;
         readonly int level; // 1..3
-        int prev, hold, holdBits, think, jumpWait, frameToggle;
+        int prev, hold, holdBits, think, jumpWait, frameToggle, dummyTime;
+        // nur Trainingspuppe: 0 stehen, 1 regelmäßig springen, 2 Schild halten
+        public int DummyMode;
 
         static readonly Random seeder = new Random(); // verschiedene Seeds auch für zwei gleichzeitig erzeugte Bots
         public Bot(int level) : this(level, seeder.Next()) { }
@@ -21,10 +23,12 @@ namespace Sensensturm
             int h = 0;
             if (level == 0)
             {
-                // Puppe: steht still, kehrt nur zur Bühne zurück
+                // Puppe: kehrt zur Bühne zurück, sonst je nach Modus stehen, springen (volle Höhe, etwa jede Sekunde) oder Schild halten
                 bool off = P.x < Arena.Main.L || P.x > Arena.Main.R || P.y > 20;
                 if (off && P.state == St.Air && P.vy > 0) h = (P.x < 0 ? Btn.Right : Btn.Left) | (P.airJumps > 0 && frameToggle++ % 12 == 0 ? Btn.Jump : 0);
                 else if (off) h = P.x < 0 ? Btn.Right : Btn.Left;
+                else if (DummyMode == 1) h = dummyTime++ % 64 < 12 ? Btn.Jump : 0;
+                else if (DummyMode == 2) h = Btn.Shield;
                 Finish(h, out held, out pressed);
                 return;
             }

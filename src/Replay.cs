@@ -70,8 +70,20 @@ namespace Sensensturm
         public void Save(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            using (var fs = File.Create(path))
-            using (var gz = new GZipStream(fs, CompressionMode.Compress))
+            using (var fs = File.Create(path)) Write(fs);
+        }
+
+        // gepackt, wie in der Datei (zum Übertragen an Client und Zuschauer)
+        public byte[] ToBytes()
+        {
+            var ms = new MemoryStream();
+            Write(ms);
+            return ms.ToArray();
+        }
+
+        void Write(Stream s)
+        {
+            using (var gz = new GZipStream(s, CompressionMode.Compress, true))
             using (var w = new BinaryWriter(gz, Encoding.UTF8))
             {
                 w.Write(Magic);
@@ -88,8 +100,14 @@ namespace Sensensturm
         // headerOnly: nur Namen und Datum (für die Liste)
         public static Replay Load(string path, bool headerOnly = false)
         {
-            using (var fs = File.OpenRead(path))
-            using (var gz = new GZipStream(fs, CompressionMode.Decompress))
+            using (var fs = File.OpenRead(path)) return Read(fs, headerOnly);
+        }
+
+        public static Replay FromBytes(byte[] data) { return Read(new MemoryStream(data), false); }
+
+        static Replay Read(Stream s, bool headerOnly)
+        {
+            using (var gz = new GZipStream(s, CompressionMode.Decompress))
             using (var r = new BinaryReader(gz, Encoding.UTF8))
             {
                 if (r.ReadInt32() != Magic) throw new InvalidDataException("Keine Sensensturm-Wiederholung.");

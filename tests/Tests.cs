@@ -27,6 +27,7 @@ namespace Sensensturm
             fails += TestNewMoves();
             fails += TestTournament();
             fails += TestPolish();
+            fails += TestTraining();
             fails += TestRecovery();
             fails += TestStages();
             fails += Screenshots();
@@ -360,11 +361,23 @@ namespace Sensensturm
             for (int i = 0; i < 100 && cl.Status != ClientSession.Connected; i++) { host.Poll(now()); cl.Poll(now()); Thread.Sleep(5); }
             Check(cl.Status == ClientSession.Connected && host.HasClient, "Client tritt bei", ref f);
 
-            // zweiter Client wird abgewiesen
+            // weitere Clients schauen zu, bis alle Zuschauerplätze besetzt sind
             var c2 = new ClientSession(); c2.Open(); c2.Connect("127.0.0.1", 47123, now());
-            for (int i = 0; i < 60 && c2.Status == ClientSession.Connecting; i++) { host.Poll(now()); c2.Poll(now()); Thread.Sleep(5); }
-            Check(c2.Status == ClientSession.Failed && c2.Error.Contains("voll"), "Zweiter Spieler: \"" + c2.Error + "\"", ref f);
-            c2.Close();
+            for (int i = 0; i < 60 && c2.Status == ClientSession.Connecting; i++) { host.Poll(now()); c2.Poll(now()); cl.Poll(now()); Thread.Sleep(5); }
+            Check(c2.Status == ClientSession.Connected && c2.Spectator && !cl.Spectator && host.Spectators.Count == 1, "Zweiter Client wird Zuschauer (" + host.Spectators.Count + " Zuschauer)", ref f);
+            var extra = new List<ClientSession>();
+            for (int n = 0; n < HostSession.MaxSpectators; n++)
+            {
+                var cx = new ClientSession(); cx.Open(); cx.Connect("127.0.0.1", 47123, now());
+                for (int i = 0; i < 60 && cx.Status == ClientSession.Connecting; i++) { host.Poll(now()); cx.Poll(now()); Thread.Sleep(5); }
+                extra.Add(cx);
+            }
+            ClientSession over = extra[extra.Count - 1];
+            Check(host.Spectators.Count == HostSession.MaxSpectators && over.Status == ClientSession.Failed && over.Error.Contains("voll"),
+                HostSession.MaxSpectators + " Zuschauer, danach voll: \"" + over.Error + "\"", ref f);
+            foreach (var cx in extra) cx.Close();
+            for (int i = 0; i < 10; i++) { host.Poll(now()); Thread.Sleep(3); }
+            Check(host.Spectators.Count == 1, "Zuschauer melden sich ab (übrig: " + host.Spectators.Count + ")", ref f);
 
             // falscher Port -> Zeitüberschreitung
             var c3 = new ClientSession(); c3.Open(); c3.Connect("127.0.0.1", 47199, now() - 5.9);
@@ -388,11 +401,13 @@ namespace Sensensturm
             hs.phase = GameState.Fight; hs.phaseTimer = 0;
             GameState pred = null;
             var ev = new List<GameEvent>();
-            int clientHits = 0, maxErr = 0;
+            int clientHits = 0, maxErr = 0, specSnaps = 0;
             for (int t = 0; t < 240; t++)
             {
                 host.Poll(now());
                 cl.Poll(now());
+                c2.Poll(now());
+                if (c2.NewSnapshot) specSnaps++;
                 if (cl.NewSnapshot && cl.Auth != null)
                 {
                     pred = cl.Auth.Clone();
@@ -421,6 +436,42 @@ namespace Sensensturm
             Check(cl.AuthTick > 200, "Snapshots synchron (Tick " + cl.AuthTick + "/" + hs.tick + ")", ref f);
             Check(maxErr < 40, "Vorhersage-Abweichung klein (max " + maxErr + " px)", ref f);
             Check(Math.Abs(Tuning.RunSpeed - 9.4f) < 0.01f, "Tuning übertragen", ref f);
+            Check(specSnaps > 150 && c2.AuthTick > 200 && c2.Pending.Count == 0, "Zuschauer bekommt die Snapshots (" + specSnaps + "), sendet keine Eingaben", ref f);
+
+            // Ergebnis: Revanche-Wunsch und neuer Kämpfer des Clients kommen beim Host an, der Wunsch des Hosts beim Client
+            host.Results = true; host.HostChar = 0; host.ClientNextChar = 1;
+            cl.InResults = true; cl.MyVote = true; cl.NextChar = 2;
+            host.HostVote = true;
+            for (int i = 0; i < 30; i++) { cl.Poll(now()); host.Poll(now()); host.SendSnapshot(hs, new List<GameEvent>()); Thread.Sleep(5); }
+            Check(host.ClientVote && host.ClientNextChar == 2 && cl.HostVote && cl.HostNextChar == 0, "Revanche: beide Wünsche und der neue Kämpfer werden übertragen", ref f);
+            cl.NextChar = 0; // Kämpfer des Hosts ist vergeben
+            for (int i = 0; i < 20; i++) { cl.Poll(now()); host.Poll(now()); Thread.Sleep(5); }
+            Check(host.ClientNextChar == 2, "Revanche: Kämpfer des Hosts kann der Client nicht nehmen", ref f);
+
+            // Wiederholung des Hosts wird in Stücken an Client und Zuschauer übertragen
+            var rp = Replay.Begin(GameState.NewMatch(0, 1, 3, 0), "Host", "Client");
+            var rnd = new Random(4);
+            for (int t = 0; t < 4000; t++) rp.Add(rnd.Next(2048), rnd.Next(2048), rnd.Next(2048), rnd.Next(2048));
+            byte[] rpData = rp.ToBytes();
+            host.OfferReplay(rpData);
+            for (int i = 0; i < 1500 && (cl.ReplayData == null || c2.ReplayData == null); i++)
+            {
+                if (i % 4 == 0) host.SendSnapshot(hs, new List<GameEvent>());
+                host.Poll(now()); cl.Poll(now()); c2.Poll(now());
+                Thread.Sleep(2);
+            }
+            Func<byte[], bool> same = d => d != null && Convert.ToBase64String(d) == Convert.ToBase64String(rpData);
+            bool loads = false;
+            try { loads = same(cl.ReplayData) && Replay.FromBytes(cl.ReplayData).Ticks == 4000; } catch { }
+            Check(loads && same(c2.ReplayData) && rpData.Length > 4 * Pk.ReplayChunkSize,
+                "Wiederholung (" + rpData.Length / 1024 + " KB, " + (rpData.Length + Pk.ReplayChunkSize - 1) / Pk.ReplayChunkSize + " Stücke) kommt bei Client und Zuschauer vollständig an", ref f);
+
+            // Spieler 2 geht -> der Zuschauer rückt nach und wird Spieler
+            host.InMatch = false;
+            cl.Close();
+            for (int i = 0; i < 60 && (c2.Spectator || !host.HasClient); i++) { host.Poll(now()); c2.Poll(now()); Thread.Sleep(5); }
+            Check(host.HasClient && host.Spectators.Count == 0 && !c2.Spectator, "Spieler 2 geht: Zuschauer rückt als Spieler 2 nach", ref f);
+            cl = c2;
 
             host.Close();
             for (int i = 0; i < 20; i++) { cl.Poll(now()); Thread.Sleep(5); }
@@ -440,7 +491,7 @@ namespace Sensensturm
 
         static int comboChar = 0;
 
-        static void RunCombo(StepDef[] steps, float dummyX, float startDamage, out int hits, out int combo, out int perfects, out GameState st, bool trace)
+        static void RunCombo(StepDef[] steps, float dummyX, float startDamage, out int hits, out int combo, out int perfects, out GameState st, bool trace, TrainingTracker trk = null)
         {
             var s = Fresh();
             s.p[0].charId = comboChar; s.p[1].charId = comboChar == 0 ? 1 : 0;
@@ -473,6 +524,7 @@ namespace Sensensturm
                     if (e.Type == Ev.Hit && e.Player == 1) hits++;
                     if (e.Type == Ev.Perfect) perfects++;
                 }
+                if (trk != null) trk.Step(s, ev);
                 ev.Clear();
                 combo = Math.Max(combo, A.combo);
                 if (trace) Console.WriteLine("    t" + t + " A:" + A.state + "/" + A.atk + " f" + A.atkFrame + " x" + (int)A.x + " y" + (int)A.y + " | B:" + B.state + " hs" + B.hitstun + " x" + (int)B.x + " y" + (int)B.y + " hits" + hits);
@@ -519,12 +571,19 @@ namespace Sensensturm
                 new { Name = "Pfeilhagel", X = 80f, Steps = new[] { At(R | L, 0), OnHit(R | H) }, Need = 2 },
             };
             var combos = w == Weapon.Hammer ? hammer : w == Weapon.Bow ? bow : scythe;
+            var trials = ComboTrial.For(w);
+            var trk = new TrainingTracker();
             foreach (var c in combos)
             {
                 int hits, combo, perf; GameState s;
-                RunCombo(c.Steps, c.X, 0, out hits, out combo, out perf, out s, Environment.GetEnvironmentVariable("TRACE") == c.Name);
+                // dieselbe Eingabefolge muss die gleichnamige Combo-Aufgabe im Training erfüllen
+                ComboTrial trial = trials.Find(x => x.Name == c.Name);
+                trk.Clear(); trk.SetTrial(trial);
+                RunCombo(c.Steps, c.X, 0, out hits, out combo, out perf, out s, Environment.GetEnvironmentVariable("TRACE") == c.Name, trk);
                 if (hits < c.Need && Environment.GetEnvironmentVariable("AUTOTRACE") == "1") RunCombo(c.Steps, c.X, 0, out hits, out combo, out perf, out s, true);
-                Check(hits >= c.Need && combo >= c.Need, c.Name + ": " + hits + " Treffer, Combo " + combo + ", " + perf + "x PERFEKT", ref f);
+                bool trialOk = trial != null && trk.TrialStep == trial.Steps.Length;
+                Check(hits >= c.Need && combo >= c.Need && trialOk, c.Name + ": " + hits + " Treffer, Combo " + combo + ", " + perf + "x PERFEKT, Combo-Aufgabe " +
+                    (trial == null ? "fehlt" : trialOk ? "erfüllt" : "nur " + trk.TrialStep + "/" + trial.Steps.Length + " (zuletzt " + trk.LastName + ")"), ref f);
             }
             // Greifen geht durch den Schild
             {
@@ -544,8 +603,11 @@ namespace Sensensturm
                 var steps = new List<StepDef> { At(U | L, 0) };
                 for (int i = 0; i < 10; i++) { steps.Add(OnHitHold(J, 6)); steps.Add(At(U | L, 4)); }
                 int hits, combo, perf; GameState s;
-                RunCombo(steps.ToArray(), 40, 0, out hits, out combo, out perf, out s, Environment.GetEnvironmentVariable("TRACE") == "Himmel" + ch);
-                Check(combo >= 10 || (combo >= 6 && s.p[1].state == St.KO), "Himmelsleiter (endlos): Combo " + combo + ", " + perf + "x PERFEKT, Gegner " + (s.p[1].state == St.KO ? "K.O. oben raus" : "y=" + (int)s.p[1].y), ref f);
+                ComboTrial ladder = trials.Find(x => x.Name == "Himmelsleiter");
+                trk.Clear(); trk.SetTrial(ladder);
+                RunCombo(steps.ToArray(), 40, 0, out hits, out combo, out perf, out s, Environment.GetEnvironmentVariable("TRACE") == "Himmel" + ch, trk);
+                bool ladderOk = ladder != null && trk.TrialStep == ladder.Steps.Length;
+                Check((combo >= 10 || (combo >= 6 && s.p[1].state == St.KO)) && ladderOk, "Himmelsleiter (endlos): Combo " + combo + ", " + perf + "x PERFEKT, Gegner " + (s.p[1].state == St.KO ? "K.O. oben raus" : "y=" + (int)s.p[1].y) + ", Combo-Aufgabe " + (ladderOk ? "erfüllt" : "nicht erfüllt"), ref f);
             }
             // Gegenprobe: ohne perfektes Timing (zu spät) reißt die Himmelsleiter ab
             {
@@ -799,16 +861,32 @@ namespace Sensensturm
             if (cl.Status != ClientSession.Connected) { host.Close(); cl.Close(); return f; }
             Check(forceRelay ? host.OverRelay : true, "Verbindungsart Host-Seite: " + (host.OverRelay ? "Relay" : "direkt"), ref f);
 
+            // Zuschauer mit demselben Raum-Code (über das Relay mit eigener Kennung, sonst direkt)
+            var sp = new ClientSession(); sp.Open();
+            var ls = new OnlineLink(); ls.Start(sp.Sock, false, code);
+            double ts = now();
+            while (now() - ts < 25 && sp.Status != ClientSession.Connected)
+            {
+                lh.Tick(now()); lc.Tick(now()); ls.Tick(now());
+                host.Poll(now()); cl.Poll(now()); sp.Poll(now());
+                if (ls.Decided != null && sp.Status == ClientSession.Idle) sp.ConnectEndpoint(ls.Decided, now());
+                if (ls.Error != null || sp.Status == ClientSession.Failed) break;
+                Thread.Sleep(10);
+            }
+            Check(sp.Status == ClientSession.Connected && sp.Spectator && host.HasClient && host.Spectators.Count == 1,
+                "Zuschauer per Raum-Code (" + ls.Mode + "), Spieler bleibt verbunden " + (ls.Error ?? sp.Error ?? ""), ref f);
+
             host.ResetMatch(); host.InMatch = true;
             var hs = GameState.NewMatch(0, 1, 3, 0); hs.phase = GameState.Fight; hs.phaseTimer = 0;
             var ev = new List<GameEvent>();
-            int snaps = 0;
+            int snaps = 0, spSnaps = 0;
             double t0 = now();
             for (int t = 0; t < 240; t++)
             {
-                lh.Tick(now()); lc.Tick(now());
-                host.Poll(now()); cl.Poll(now());
+                lh.Tick(now()); lc.Tick(now()); ls.Tick(now());
+                host.Poll(now()); cl.Poll(now()); sp.Poll(now());
                 if (cl.NewSnapshot) snaps++;
+                if (sp.NewSnapshot) spSnaps++;
                 cl.SendInput(t < 40 ? Btn.Left : 0, t == 0 ? Btn.Left : 0);
                 int h1, p1; host.TakeInput(out h1, out p1);
                 ev.Clear();
@@ -819,7 +897,8 @@ namespace Sensensturm
             double secs = now() - t0;
             Check(hs.p[1].x < 200, "Eingaben kommen beim Host an (Client-x=" + (int)hs.p[1].x + ")", ref f);
             Check(snaps > 40, "Snapshots beim Client: " + snaps + " in " + secs.ToString("0.0") + " s (" + (snaps / secs).ToString("0") + "/s), Ping " + cl.Ping + " ms", ref f);
-            host.Close(); cl.Close();
+            Check(spSnaps > 40, "Snapshots beim Zuschauer: " + spSnaps, ref f);
+            host.Close(); cl.Close(); sp.Close();
             OnlineLink.ForceRelay = false;
             return f;
         }
@@ -1012,6 +1091,37 @@ namespace Sensensturm
             game.DebugScreen(Scr.Replays);
             game.DebugFrames(3);
             shotGame("shot_replay_list");
+            // Training: Auswahl, Anzeige nach einem Treffer mit Combo-Aufgabe, Optionen (neues Spiel, das alte steckt noch in der Wiedergabe)
+            game = new Game();
+            Settings.P1Char = 0; Settings.TrainChar = 2;
+            game.DebugScreen(Scr.Training);
+            game.DebugFrames(3);
+            shotGame("shot_training_setup");
+            game.DebugTraining(0, 1);
+            game.DebugState.p[1].x = game.DebugState.p[0].x + 70;
+            game.In.KeyDown(System.Windows.Forms.Keys.J);
+            game.DebugFrames(2);
+            game.In.KeyUp(System.Windows.Forms.Keys.J);
+            game.DebugFrames(40);
+            shotGame("shot_training");
+            game.DebugPause();
+            game.DebugFrames(2);
+            shotGame("shot_training_pause");
+            // Siegerposen aller Kämpfer
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.FromArgb(28, 20, 40));
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                for (int c = 0; c < CharDef.Count; c++) { r.DrawVictory(g, c, 160 + c * 320, 600, 1.75f, 60); r.DrawVictory(g, c, 160 + c * 320, 250, 0.9f, 6); }
+                bmp.Save(System.IO.Path.Combine(outDir, "shot_victory_poses.png"), ImageFormat.Png);
+            }
+            // Siegerbildschirm nach einem CPU-Match über 3 Leben
+            game.DebugCpuMatch(2, 3, 3, 7);
+            game.DebugFrames(16);
+            shotGame("shot_victory_anim");
+            game.DebugFrames(110);
+            shotGame("shot_victory");
             return sf;
         }
 
@@ -1100,6 +1210,82 @@ namespace Sensensturm
                 bool rejected = false;
                 try { Replay.Load(path); } catch (System.IO.InvalidDataException) { rejected = true; }
                 Check(same && rejected && size < 20000, "Wiederholung: 3000 Frames identisch nachsimuliert, Datei " + size / 1024.0 + " KB, fremde Version abgelehnt", ref f);
+            }
+            return f;
+        }
+
+        static int TestTraining()
+        {
+            Console.WriteLine("Training und Siegerbildschirm:");
+            int f = 0;
+            var ev = new List<GameEvent>();
+            // Bilddaten und gemessener Frame-Vorteil: leichter Angriff auf die stehende Puppe
+            {
+                var s = Duel(0, 1, 70);
+                var trk = new TrainingTracker(); trk.Sync(s);
+                for (int t = 0; t < 120; t++)
+                {
+                    Sim.Step(s, new[] { t < 3 ? Btn.Light : 0, 0 }, new[] { t == 0 ? Btn.Light : 0, 0 }, ev, false);
+                    trk.Step(s, ev); ev.Clear();
+                }
+                AttackDef d = Attacks.SetOf(0)[Attacks.NLight];
+                Check(trk.HasHit && trk.LastName == d.Name && trk.LastTotal == d.Total && Math.Abs(trk.LastDamage - s.p[1].damage) < 0.01f && trk.AdvKnown,
+                    "Training: " + trk.LastName + " " + trk.LastDamage.ToString("0.0") + " % (Start " + trk.LastStartup + ", Gesamt " + trk.LastTotal + "), Frame-Vorteil gemessen: " + trk.Advantage, ref f);
+            }
+            // Puppen-Verhalten: Schild halten und springen
+            {
+                var s = Duel(0, 1, 200);
+                var b = new Bot(0, 1) { DummyMode = 2 };
+                for (int t = 0; t < 30; t++) { int h, p; b.Think(s, 1, out h, out p); Sim.Step(s, new[] { 0, h }, new[] { 0, p }, null, false); }
+                bool shield = s.p[1].state == St.Shield;
+                s = Duel(0, 1, 200);
+                b = new Bot(0, 1) { DummyMode = 1 };
+                int jumps = 0; bool wasGround = true;
+                for (int t = 0; t < 200; t++)
+                {
+                    int h, p; b.Think(s, 1, out h, out p); Sim.Step(s, new[] { 0, h }, new[] { 0, p }, null, false);
+                    if (wasGround && !s.p[1].onGround) jumps++;
+                    wasGround = s.p[1].onGround;
+                }
+                Check(shield && jumps >= 2, "Puppe hält den Schild bzw. springt regelmäßig (" + jumps + " Sprünge)", ref f);
+            }
+            // Im Spiel: kein Countdown, Startschaden, K.O. kostet kein Leben, keine Wiederholung, Puppen-Aufnahme
+            {
+                int keepChar = Settings.P1Char, keepTrain = Settings.TrainChar;
+                Settings.P1Char = 0; Settings.TrainChar = 1; Settings.TrainDamage = 50; Settings.TrainReset = true;
+                var game = new Game();
+                game.DebugTraining(0, -1);
+                game.DebugFrames(3);
+                var s = game.DebugState;
+                Check(s.phase == GameState.Fight && Math.Abs(s.p[1].damage - 50) < 0.01f && !game.DebugRecording, "Training startet ohne Countdown, Puppe mit 50 % Startschaden, keine Aufnahme", ref f);
+                s.p[1].x = 5000;
+                game.DebugFrames(Tuning.RespawnDelay + 30);
+                s = game.DebugState;
+                Check(s.phase == GameState.Fight && s.p[1].stocks == s.stocks && Math.Abs(s.p[1].damage - 50) < 0.01f, "K.O. im Training: kein Leben verloren, Puppe kommt mit Startschaden zurück", ref f);
+                game.DebugFrames(120);
+                game.OnKey(System.Windows.Forms.Keys.F6);
+                game.In.KeyDown(System.Windows.Forms.Keys.A);
+                game.DebugFrames(25);
+                game.In.KeyUp(System.Windows.Forms.Keys.A);
+                game.DebugFrames(20);
+                game.OnKey(System.Windows.Forms.Keys.F6);
+                game.DebugFrames(1);
+                float x0 = game.DebugState.p[1].x;
+                game.DebugFrames(24);
+                float moved = game.DebugState.p[1].x - x0;
+                Check(Settings.TrainDummy == Game.DummyNames.Length - 1 && moved < -60, "Puppen-Aufnahme: Spieler steuert die Puppe, danach läuft sie die Aufnahme ab (" + (int)moved + " px)", ref f);
+                Settings.TrainDummy = 0; Settings.TrainDamage = 0;
+                Settings.P1Char = keepChar; Settings.TrainChar = keepTrain;
+            }
+            // Siegerbildschirm: Auszeichnungen und Werte aus den Ereignissen
+            {
+                var game = new Game();
+                Settings.Opponent = 3; Settings.P1Char = 2; Settings.P2Char = 3;
+                game.DebugFinishLocal(Settings.Stocks);
+                game.DebugFrames(130);
+                var s = game.DebugState;
+                List<string> aw = game.DebugAwards(0);
+                Check(s.phase == GameState.Over && s.winner == 0 && aw.Contains("Makellos") && aw.Contains("Blitzsieg"), "Siegerbildschirm: Sieg ohne Lebensverlust = " + string.Join(", ", aw.ToArray()), ref f);
             }
             return f;
         }

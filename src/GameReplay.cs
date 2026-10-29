@@ -16,15 +16,17 @@ namespace Sensensturm
         bool replayPaused;
         byte[] replayTuningBackup;
         GameState replayBackupState;
+        MatchStats replayBackupStats;
         readonly string[] replayBackupNames = new string[2];
         Action replayDone;       // nach dem Abspielen
         List<string> replayFiles; // Liste im Menü (null = neu einlesen)
         readonly List<Replay> replayHeaders = new List<Replay>();
 
-        // Aufnahme starten (Client-Matches nicht: dort fehlen die Eingaben des Hosts)
+        // Aufnahme starten. Nicht als Client (dort fehlen die Eingaben des Hosts, die Aufnahme kommt nach dem Match
+        // vom Host) und nicht im Training (das Spiel greift dort von außen in den Zustand ein).
         void BeginRecording()
         {
-            rec = mode == Mode.Client ? null : Replay.Begin(state, names[0], names[1]);
+            rec = mode == Mode.Client || training ? null : Replay.Begin(state, names[0], names[1]);
         }
 
         void Record(int h0, int p0, int h1, int p1)
@@ -32,7 +34,12 @@ namespace Sensensturm
             if (rec == null) return;
             rec.Add(h0, p0, h1, p1);
             // kurz nach dem Spielende abschließen (sonst wächst die Aufnahme im Ergebnisbildschirm weiter)
-            if (state.phase == GameState.Over && state.phaseTimer >= 100) { lastReplay = rec; rec = null; }
+            if (state.phase == GameState.Over && state.phaseTimer >= 100)
+            {
+                lastReplay = rec;
+                rec = null;
+                if (mode == Mode.Host && host != null) host.OfferReplay(lastReplay.ToBytes());
+            }
         }
 
         void StartReplay(Replay rp, Action done)
@@ -40,6 +47,7 @@ namespace Sensensturm
             if (rp == null) return;
             replayTuningBackup = Tuning.ToBytes();
             replayBackupState = state;
+            replayBackupStats = stats;
             replayBackupNames[0] = names[0]; replayBackupNames[1] = names[1];
             try
             {
@@ -55,6 +63,7 @@ namespace Sensensturm
             }
             replay = rp;
             replayDone = done;
+            stats = new MatchStats();
             replayTick = 0; replaySpeed = 1; replayEndWait = 0; replayPaused = false;
             names[0] = rp.Name0; names[1] = rp.Name1;
             comboView = false;
@@ -70,6 +79,7 @@ namespace Sensensturm
             Tuning.FromBytes(replayTuningBackup);
             replay = null;
             state = replayBackupState;
+            stats = replayBackupStats ?? new MatchStats();
             names[0] = replayBackupNames[0]; names[1] = replayBackupNames[1];
             R.ClearFx();
             if (state != null) R.SnapCamera(state);
@@ -87,6 +97,9 @@ namespace Sensensturm
 
         void TickReplay()
         {
+            // Client/Zuschauer: startet der Host ein neues Match oder geht zur Lobby, endet die Wiedergabe sofort
+            if (mode == Mode.Client && client != null && replayBackupState != null &&
+                (client.NewMatch || client.LobbyReceived || client.Status == ClientSession.Failed)) { EndReplay(); return; }
             foreach (MenuKey k in In.Menu)
             {
                 if (k == MenuKey.Back || k == MenuKey.Pause) { EndReplay(); return; }
@@ -107,7 +120,8 @@ namespace Sensensturm
                 replay.Get(replayTick++, out h0, out p0, out h1, out p1);
                 evs.Clear();
                 Sim.Step(state, new[] { h0, h1 }, new[] { p0, p1 }, evs, false);
-                foreach (GameEvent e in evs) R.OnEvent(e, state);
+                foreach (GameEvent e in evs) OnEvent(e);
+                stats.Sample(state);
             }
             R.UpdateCamera(state);
         }

@@ -31,9 +31,19 @@ Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 
 **CPU-Gegner:** Leicht, mittel und schwer unterscheiden sich in Reaktion, Tempo und Combos. Hat der Gegner viel Schaden, spielt die CPU gezielt auf K.O.: Sie setzt starke Angriffe ein, bewacht die Kante und schlägt Gegner beim Zurückkommen wieder hinaus. Sich selbst rettet sie mit Sprüngen, Wandsprüngen, Aufschwung und Luft-Dodge.
 
+## Siegerbildschirm
+Nach jedem Match reißt der Sieger seine Waffe hoch, sagt einen Siegesspruch und bekommt **Auszeichnungen** (z. B. *Makellos* ohne Lebensverlust, *Aufholjagd* nach Rückstand, *Blitzsieg* unter einer Minute, *Combo-Meister*, *Perfektionist*, *Eiserne Wand*, *Ultimative Macht*). Daneben stehen beide Kämpfer im Vergleich: verursachter Schaden, Treffer, längste Combo, PERFEKT-Treffer, Paraden, K.O.s und Ultimates, dazu die Kampfdauer und ein Diagramm **Schaden im Verlauf** mit allen K.O.s. Darunter liegen Revanche, Wiederholung und Speichern.
+
+## Training
+Im Hauptmenü **Training** wählen, den eigenen Kämpfer, den der Trainingspuppe und die Arena einstellen. Im Training gibt es keine Leben und kein Zeitlimit, ein K.O. kostet nichts.
+- **Letzter Treffer:** Name des Angriffs, Schaden, Bilddaten (Start, Aktiv, Gesamt) und der **Frame-Vorteil**. Der Vorteil wird gemessen, nicht geschätzt: So viele Frames früher (+) oder später (−) als die Puppe kannst du nach dem Treffer wieder handeln. Dazu kommen die laufende und die beste Combo mit Schaden.
+- **Trainingsoptionen** (Esc): Verhalten der Puppe (stehen, springen, Schild halten, CPU leicht/mittel/schwer, Aufnahme abspielen), Startschaden der Puppe (0–300 %), Schaden nach jeder Combo zurücksetzen, Ultimate-Leiste immer voll, Hitboxen, Combo-Aufgabe.
+- **Puppe aufnehmen:** **F6** startet die Aufnahme. Du steuerst dann bis zu 10 Sekunden die Puppe, ein zweites F6 beendet sie. Danach spielt die Puppe deine Aufnahme in Schleife ab, zum Üben gegen genau eine Situation. **F7** schaltet die Wiedergabe an und aus, **F5** setzt die Positionen zurück.
+- **Combo-Aufgaben:** Je Waffe die Combos aus *Combos lernen* (inklusive Himmelsleiter). Die Anzeige zeigt die Tastenfolge und hakt jeden Schritt ab. Geschaffte Aufgaben werden gespeichert. Direkt aus *Extras > Combos lernen > Im Training üben* geht es mit der ersten Aufgabe der gewählten Waffe los.
+
 ## Wiederholungen
-Lokale und selbst gehostete Matches werden automatisch aufgezeichnet. Im Ergebnisbildschirm gibt es **Wiederholung ansehen** und **Speichern** (Ordner `replays` neben der .exe). Gespeicherte Wiederholungen findest du unter *Extras > Wiederholungen*. In der Wiedergabe gilt: Enter = Pause, Links/Rechts = Tempo (1×/2×/4×), Esc = Ende. Im Turnier lassen sich das letzte Match und das Finale noch einmal ansehen, auch ausgerechnete CPU-Matches.
-Eine Wiederholung speichert nur die Eingaben (meist wenige KB) und spielt das Match exakt nach. Dateien aus einer anderen Spielversion werden deshalb abgelehnt. Als Online-Client gibt es keine Aufnahme, weil dort die Eingaben des Hosts fehlen.
+Alle Matches werden automatisch aufgezeichnet (außer im Training). Im Ergebnisbildschirm gibt es **Wiederholung ansehen** und **Speichern** (Ordner `replays` neben der .exe). Gespeicherte Wiederholungen findest du unter *Extras > Wiederholungen*. In der Wiedergabe gilt: Enter = Pause, Links/Rechts = Tempo (1×/2×/4×), Esc = Ende. Im Turnier lassen sich das letzte Match und das Finale noch einmal ansehen, auch ausgerechnete CPU-Matches.
+Eine Wiederholung speichert nur die Eingaben (meist wenige KB) und spielt das Match exakt nach. Dateien aus einer anderen Spielversion werden deshalb abgelehnt. Online-Client und Zuschauer bekommen die Aufnahme nach dem Match vom Host geschickt (Anzeige „Wiederholung lädt ...“). Danach können sie sie genauso ansehen und speichern.
 
 ## Turnier (bis zu 16 Spieler)
 Im Hauptmenü **Turnier** wählen:
@@ -50,12 +60,16 @@ Der **Turnierbaum** ist animiert. Die Teilnehmer fliegen nacheinander ein, die L
 2. Mitspieler: **Online-Spiel beitreten**, Code eingeben, **Verbinden**.
 3. Beide wählen ihren Charakter, dann startet der Host das Match.
 
+**Zuschauer:** Wer mit demselben Code (oder im LAN über dieselbe Lobby) beitritt, wenn Spieler 2 schon da ist, schaut zu. Bis zu 4 Zuschauer sehen das Match live, sehen den Siegerbildschirm und bekommen danach die Wiederholung. Verlässt Spieler 2 das Spiel, rückt der erste Zuschauer als Spieler nach.
+
+**Revanche ohne Lobby:** Im Siegerbildschirm wählen beide **Revanche**. Sobald beide zugestimmt haben, startet das nächste Match sofort. Vorher kann jeder mit Links/Rechts seinen Kämpfer wechseln. Ob der andere schon bereit ist, steht über den Knöpfen. Der Host kann stattdessen **Zur Lobby** wählen, um Leben, Zeit oder Arena zu ändern.
+
 Keine Portfreigabe nötig: Beide PCs treffen sich über einen öffentlichen Vermittlungsserver (MQTT, ausgehender TCP-Port 1883). Zuerst wird eine **Direktverbindung** per UDP-Hole-Punching aufgebaut (STUN). Klappt das nicht, etwa bei strenger Firewall oder symmetrischem NAT in Schul- und Firmennetzen, läuft das Spiel automatisch **über das Relay** (etwas höhere Verzögerung, 30 statt 60 Updates/s). Die Verbindungsart wird oben rechts angezeigt.
 Hinweis: Der Vermittlungsserver ist ein öffentlicher Testdienst (broker.hivemq.com, Ersatz: broker.emqx.io, test.mosquitto.org). Er ist meist zuverlässig, aber ohne Garantie.
 
 ## LAN-Spiel (zwei PCs im selben WLAN/LAN)
 1. PC 1: *Online & LAN >* **LAN-Spiel erstellen**. IP-Adresse und Port (Standard 7777) werden angezeigt.
-2. PC 2: **LAN-Spiel beitreten**. Die Lobby erscheint meist automatisch unter „Gefunden“, sonst die IP eintippen und **Verbinden** wählen.
+2. PC 2: **LAN-Spiel beitreten**. Die Lobby erscheint meist automatisch unter „Gefunden“ (mit „zuschauen“, wenn Spieler 2 schon da ist), sonst die IP eintippen und **Verbinden** wählen.
 3. PC 1 wählt **Match starten**. Über Esc beendet der Host das Match wieder (zurück zur Lobby).
 
 Beim ersten Hosten fragt die Windows-Firewall nach. Dort **„Private Netzwerke“ erlauben**. Wenn der Beitritt fehlschlägt, liegt es fast immer an der Firewall (UDP-Port 7777) oder daran, dass ein Gerät in einem Gäste-WLAN mit Client-Isolation hängt.
@@ -74,13 +88,13 @@ Technik: Der Host rechnet das Spiel autoritativ und entscheidet allein über Tre
 | Greifen / Werfen (Sensenhaken) | E | Num 4 | Y |
 | **Ultimate** (Leiste voll) | Q | Num 6 | rechten Stick drücken |
 
-Esc/Start = Pause · F1/Back = Combos ansehen · F11 = Vollbild · F3 = Hitboxen anzeigen
+Esc/Start = Pause · F1/Back = Combos ansehen · F11 = Vollbild · F3 = Hitboxen anzeigen · im Training: F5 Reset, F6 Puppe aufnehmen, F7 Aufnahme an/aus
 
 ## Spielmechanik
 - **Bewegung:** sofortige Beschleunigung, variable Sprunghöhe, 3 Luftsprünge, Coyote-Time, Schnellfallen (Unten in der Luft), Dash und Sprint, Luft-Dodge in 8 Richtungen (einmal pro Luftphase, mit Abklingzeit), Wandrutschen und Wandsprung an den Seiten der Hauptplattform, Schwebeplattformen (Unten + Springen zum Durchfallen).
 - **Sense, leichte Angriffe:** neutral, vorne, oben, unten (Boden) sowie neutral, vorne, oben, unten (Luft).
 - **Sense, schwere Angriffe:** schwerer Seitenhieb (aufladbar), *Seelenernte* (lange aufladbar, viel Schaden, aber großes Risiko: Treffer beim Aufladen machen +25 % Schaden), Erdspalter, schwerer Luftschwung, Fallbeil (Sturz mit Aufprall-Schockwelle) und Aufschwung (Recovery nach oben, einmal pro Luftphase).
-- **Combos:** Nur nach einem echten Treffer gibt es ein kurzes Cancel-Fenster in einen *anderen* Angriff, einen Sprung, einen Dodge oder einen Griff. Verfehlte Angriffe lassen sich nicht abbrechen. Alle Combos zum Lernen stehen unter *Extras > Combos lernen*. Üben kannst du sie gegen die *Trainingspuppe* (Lokal spielen > Gegner).
+- **Combos:** Nur nach einem echten Treffer gibt es ein kurzes Cancel-Fenster in einen *anderen* Angriff, einen Sprung, einen Dodge oder einen Griff. Verfehlte Angriffe lassen sich nicht abbrechen. Alle Combos zum Lernen stehen unter *Extras > Combos lernen*. Üben kannst du sie im *Training* (mit Combo-Aufgaben, siehe oben).
 - **PERFEKT-Timing:** Drückst du die nächste Taste kurz *nach* dem Trefferstopp (nicht schon vorher), erscheint PERFEKT. Der Gegner bleibt länger betäubt, ein perfekter Sprung kostet keinen Luftsprung und zielt automatisch auf den Gegner. Perfekte Ketten reißen deshalb nicht ab (z. B. die Himmelsleiter bis zum K.O.).
 - **Verfolgungs-Dodge:** Dodge direkt nach einem Treffer jagt dem Gegner hinterher.
 - **Sensenhaken:** Greifen geht durch Schild und Parade. Danach wirfst du per Richtung nach vorne, hinten, oben oder unten. Ein Wurf nach unten eignet sich als Combo-Starter.
