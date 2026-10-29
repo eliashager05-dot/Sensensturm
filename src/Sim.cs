@@ -1340,7 +1340,7 @@ namespace Sensensturm
             }
             else
             {
-                if (P.projKind != 3) P.projVy += 0.1f; // der Ultimate-Pfeil fliegt gerade
+                if (P.projKind != 3 && P.projKind != 5) P.projVy += 0.1f; // Ultimate-Pfeil und Feuerball fliegen gerade
                 P.projX += P.projVx;
                 P.projY += P.projVy;
                 Box M = Arena.Main;
@@ -1348,7 +1348,7 @@ namespace Sensensturm
             }
             if (P.projLife <= 0 || P.projX < Arena.BlastL || P.projX > Arena.BlastR || P.projY < Arena.BlastT || P.projY > Arena.BlastB)
             {
-                if (P.projOn && P.projKind == 0) Emit(Ev.ProjBreak, P.slot, P.projX, P.projY, 0);
+                if (P.projOn && (P.projKind == 0 || P.projKind >= 4)) Emit(Ev.ProjBreak, P.slot, P.projX, P.projY, 0);
                 P.projOn = false;
             }
         }
@@ -1357,6 +1357,7 @@ namespace Sensensturm
         {
             if (P.projKind == 2) return new Box(P.projX - 30, P.projY - 48, P.projX + 30, P.projY);
             if (P.projKind == 3) return new Box(P.projX - 55, P.projY - 30, P.projX + 55, P.projY + 30);
+            if (P.projKind == 5) return new Box(P.projX - 24, P.projY - 20, P.projX + 24, P.projY + 20);
             return new Box(P.projX - 20, P.projY - 9, P.projX + 20, P.projY + 9);
         }
 

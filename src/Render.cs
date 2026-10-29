@@ -671,6 +671,29 @@ namespace Sensensturm
         {
             if (c.Weapon == Weapon.Scythe) { DrawScythe(g, st, r, c, glow, alpha); return; }
             PointF d = Dir(pose.Scy, 1), b = Dir(pose.Scy + 90, 1);
+            if (c.Weapon == Weapon.Daggers) { DrawDagger(g, st, r.HF, pose.Scy, 1f, c, glow, alpha); return; }
+            if (c.Weapon == Weapon.Staff)
+            {
+                // Stab aus dunklem Holz, oben eine Feuerkugel zwischen zwei Krallen
+                PointF butt = Add(r.HF, Mul(d, -30)), top = Add(r.HF, Mul(d, 60));
+                g.DrawLine(st.ShaftOut, butt, top);
+                g.DrawLine(st.Shaft, butt, top);
+                g.DrawLine(st.Leather, Add(r.HF, Mul(d, -4)), Add(r.HF, Mul(d, 6)));
+                PointF orb = Add(top, Mul(d, 11));
+                foreach (int sgn in new[] { 1, -1 })
+                {
+                    PointF[] claw = { Add(top, Mul(b, 4 * sgn)), Add(top, Add(Mul(b, 12 * sgn), Mul(d, 9))), Add(top, Add(Mul(b, 7 * sgn), Mul(d, 22))), Add(top, Add(Mul(b, 6 * sgn), Mul(d, 9))) };
+                    g.DrawPolygon(st.HeadOut, claw);
+                    g.FillPolygon(st.BladeB, claw);
+                }
+                float fl = 1f + 0.12f * (float)Math.Sin(frame * 0.3 + P.slot);
+                float rg = (glow ? 21 : 15) * fl;
+                using (var gb = new SolidBrush(A(c.Glow, (glow ? 0.45f : 0.28f) * alpha))) g.FillEllipse(gb, orb.X - rg, orb.Y - rg, rg * 2, rg * 2);
+                g.FillEllipse(st.OutlineB, orb.X - 8, orb.Y - 8, 16, 16);
+                g.FillEllipse(st.GlowB, orb.X - 6.5f, orb.Y - 6.5f, 13, 13);
+                g.FillEllipse(st.EyeCore, orb.X - 3, orb.Y - 4, 6, 6);
+                return;
+            }
             if (c.Weapon == Weapon.Hammer)
             {
                 PointF butt = Add(r.HF, Mul(d, -24)), top = Add(r.HF, Mul(d, 58));
@@ -728,8 +751,35 @@ namespace Sensensturm
             }
         }
 
+        // gebogener Dolch in der Hand, Klinge in Richtung ang
+        void DrawDagger(Graphics g, Style st, PointF hand, float ang, float size, CharDef c, bool glow, float alpha)
+        {
+            PointF d = Dir(ang, size), b = Dir(ang + 90, size);
+            PointF baseA = Add(hand, Add(Mul(d, 7), Mul(b, 4.5f))), baseB = Add(hand, Add(Mul(d, 7), Mul(b, -3.5f)));
+            PointF tip = Add(hand, Add(Mul(d, 38), Mul(b, -5)));
+            using (var path = new GraphicsPath())
+            {
+                path.AddBezier(baseA, Add(hand, Add(Mul(d, 20), Mul(b, 6))), Add(hand, Add(Mul(d, 32), Mul(b, 2))), tip);
+                path.AddBezier(tip, Add(hand, Add(Mul(d, 26), Mul(b, -5))), Add(hand, Add(Mul(d, 16), Mul(b, -4))), baseB);
+                path.CloseFigure();
+                if (glow) using (var gp = RPen(A(c.Glow, 0.45f * alpha), 9)) g.DrawPath(gp, path);
+                g.DrawPath(st.HeadOut, path);
+                g.FillPath(st.BladeB, path);
+            }
+            g.DrawLine(st.Edge, Add(hand, Add(Mul(d, 10), Mul(b, 3.2f))), Add(hand, Add(Mul(d, 33), Mul(b, -2))));
+            g.DrawLine(st.ShaftOut, Add(hand, Mul(d, -9)), Add(hand, Mul(d, 2)));
+            g.DrawLine(st.Shaft, Add(hand, Mul(d, -9)), Add(hand, Mul(d, 2)));
+            PointF ga = Add(hand, Add(Mul(d, 5), Mul(b, 8))), gb2 = Add(hand, Add(Mul(d, 5), Mul(b, -8)));
+            g.DrawLine(st.HeadOut, ga, gb2);
+            g.DrawLine(st.Rim, ga, gb2);
+            PointF pm = Add(hand, Mul(d, -10));
+            g.FillEllipse(st.GlowB, pm.X - 3, pm.Y - 3, 6, 6);
+        }
+
         void DrawShield(Graphics g, Style st, PointF hand, float lean, bool front, float alpha, CharDef c)
         {
+            // Nyx trägt in der hinteren Hand den zweiten Dolch im Rückhandgriff, der Schild erscheint nur beim Blocken
+            if (!front && c.Weapon == Weapon.Daggers) { DrawDagger(g, st, hand, 100 + lean * 0.5f, 0.85f, c, false, alpha); return; }
             var gs = g.Save();
             g.TranslateTransform(hand.X + (front ? 5 : 2), hand.Y);
             g.RotateTransform(lean * 0.5f);
@@ -827,6 +877,8 @@ namespace Sensensturm
                 if (d.FootTrail) { a = r.FF; b = Lp(r.KF, r.FF, 0.4f); }
                 else if (w == Weapon.Hammer) { PointF dd = Dir(pose.Scy, 1); a = Add(r.HF, Mul(dd, 74)); b = Add(r.HF, Mul(dd, 30)); }
                 else if (w == Weapon.Bow) { PointF dd = Dir(pose.Scy, 1); a = Add(r.HF, Mul(dd, 20)); b = r.HF; }
+                else if (w == Weapon.Daggers) { PointF dd = Dir(pose.Scy, 1); a = Add(r.HF, Mul(dd, 38)); b = Add(r.HF, Mul(dd, 10)); }
+                else if (w == Weapon.Staff) { PointF dd = Dir(pose.Scy, 1); a = Add(r.HF, Mul(dd, 72)); b = Add(r.HF, Mul(dd, 38)); }
                 else { a = r.Tip; b = Lp(r.Top, r.Inner, 0.5f); }
                 a = Mul(a, sc); b = Mul(b, sc);
                 trailA[i].Add(ToWorld(a, pose.Spin, facing, wx, wy));
@@ -890,6 +942,30 @@ namespace Sensensturm
                     DrawStar(g, x + d * 40, y, 10 + fl, Color.White);
                     parts.Add(new Particle { Kind = 0, X = x - d * 30, Y = y + (float)(rng.NextDouble() - 0.5) * 40, VX = -d * 4, VY = (float)(rng.NextDouble() - 0.5) * 3, Life = 16, Max = 16, Size = 3, C = c.Glow, Drag = 0.92f });
                     if (frame % 2 == 0) parts.Add(new Particle { Kind = 1, X = x, Y = y, Size = 24, Life = 14, Max = 14, C = c.Glow });
+                }
+                else if (P.projKind == 4)
+                {
+                    // Wurfdolch: dreht sich im Flug
+                    float x = P.projX, y = P.projY;
+                    using (var p = RPen(A(c.Glow, 0.3f), 8)) g.DrawLine(p, x, y, x - P.projVx * 2.2f, y - P.projVy * 2.2f);
+                    Style st = GetStyle(P.charId, P.skin, 0, 1);
+                    DrawDagger(g, st, new PointF(x - (float)Math.Cos(frame * 0.7) * 12, y - (float)Math.Sin(frame * 0.7) * 12), frame * 40f, 0.9f, c, true, 1f);
+                }
+                else if (P.projKind == 5)
+                {
+                    // Feuerball mit flackerndem Schweif
+                    float x = P.projX, y = P.projY;
+                    float len = (float)Math.Sqrt(P.projVx * P.projVx + P.projVy * P.projVy);
+                    float dx = P.projVx / Math.Max(0.01f, len), dy = P.projVy / Math.Max(0.01f, len);
+                    float fl = (float)Math.Sin(frame * 0.8) * 3;
+                    using (var b = new SolidBrush(A(c.Glow, 0.22f))) g.FillEllipse(b, x - 34 - fl, y - 34 - fl, 68 + fl * 2, 68 + fl * 2);
+                    using (var p = RPen(A(c.Glow, 0.45f), 22)) g.DrawLine(p, x, y, x - dx * 46, y - dy * 46);
+                    using (var p = RPen(A(c.Edge, 0.6f), 10)) g.DrawLine(p, x, y, x - dx * 30, y - dy * 30);
+                    using (var b = new SolidBrush(c.Outline)) g.FillEllipse(b, x - 18, y - 18, 36, 36);
+                    using (var b = new SolidBrush(c.Glow)) g.FillEllipse(b, x - 16, y - 16, 32, 32);
+                    using (var b = new SolidBrush(c.Edge)) g.FillEllipse(b, x - 10 + dx * 3, y - 10 + dy * 3, 20, 20);
+                    using (var b = new SolidBrush(Color.FromArgb(240, 255, 255, 235))) g.FillEllipse(b, x - 5 + dx * 5, y - 5 + dy * 5, 10, 10);
+                    parts.Add(new Particle { Kind = 1, X = x - dx * 14 + (float)(rng.NextDouble() - 0.5) * 16, Y = y - dy * 14 + (float)(rng.NextDouble() - 0.5) * 16, VY = -1.2f, Size = 9, Life = 16, Max = 16, C = rng.Next(2) == 0 ? c.Glow : c.Edge, Drag = 0.95f });
                 }
                 else
                 {
@@ -1524,6 +1600,31 @@ namespace Sensensturm
                         Sparks(e.X + P.facing * 120, e.Y - 90, 24, Color.White, 12, 3);
                         AddShake(12);
                         Audio.Play(Sfx.SwingHeavy, 1.2f, 0.7f);
+                    }
+                    else if (e.V == Weapon.Daggers)
+                    {
+                        // Tausend Klingen: Schnittspuren entlang der Bahn
+                        for (int k = 0; k < 9; k++)
+                            parts.Add(new Particle { Kind = 3, X = e.X + P.facing * (40 + k * 34), Y = e.Y - 40 - (float)rng.NextDouble() * 110, Rot = (float)(rng.NextDouble() * 180), Size = 90 + (float)rng.NextDouble() * 60, Life = 18 + k * 2, Max = 18 + k * 2, C = k % 2 == 0 ? c.Glow : Color.White });
+                        Sparks(e.X + P.facing * 150, e.Y - 90, 26, c.Glow, 13, 3);
+                        AddShake(12);
+                        Audio.Play(Sfx.SwingHeavy, 1.2f, 1.3f);
+                    }
+                    else if (e.V == Weapon.Staff)
+                    {
+                        // Inferno: Feuerexplosion rund um Pyros
+                        parts.Add(new Particle { Kind = 8, X = e.X, Y = e.Y, Size = 320, Life = 26, Max = 26, C = c.Glow });
+                        Ring(e.X, e.Y - 110, 300, c.Glow, 26);
+                        Ring(e.X, e.Y - 110, 200, c.Edge, 20);
+                        parts.Add(new Particle { Kind = 1, X = e.X, Y = e.Y - 110, Size = 230, Life = 16, Max = 16, C = c.Glow });
+                        for (int k = 0; k < 40; k++)
+                        {
+                            double a = rng.NextDouble() * Math.PI * 2;
+                            float sp = 6 + (float)rng.NextDouble() * 10;
+                            parts.Add(new Particle { Kind = 1, X = e.X, Y = e.Y - 110, VX = (float)Math.Cos(a) * sp, VY = (float)Math.Sin(a) * sp, Size = 10 + (float)rng.NextDouble() * 12, Life = 22, Max = 22, C = rng.Next(2) == 0 ? c.Glow : c.Edge, Drag = 0.9f });
+                        }
+                        AddShake(18);
+                        Audio.Play(Sfx.Shock, 1.2f, 0.9f);
                     }
                     Flash = Math.Max(Flash, 0.25f); flashColor = Color.White;
                     break;

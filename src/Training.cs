@@ -34,6 +34,18 @@ namespace Sensensturm
             T(Sensensturm.Weapon.Bow, "Pfeilhagel", S(Attacks.SLight), S(Attacks.SHeavy)),
             T(Sensensturm.Weapon.Hammer, "Himmelsleiter", S(Attacks.ULight), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir)),
             T(Sensensturm.Weapon.Bow, "Himmelsleiter", S(Attacks.ULight), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir)),
+            T(Sensensturm.Weapon.Daggers, "Schattenhatz", S(Attacks.NLight), S(Attacks.SLight)),
+            T(Sensensturm.Weapon.Daggers, "Klingenaufstieg", S(Attacks.ULight), S(Attacks.UAir)),
+            T(Sensensturm.Weapon.Daggers, "Fersenfalle", S(Attacks.DLight), S(Attacks.SAir)),
+            T(Sensensturm.Weapon.Daggers, "Schattengriff-Wurf", S(Attacks.Throw), S(Attacks.ULight), S(Attacks.UAir)),
+            T(Sensensturm.Weapon.Daggers, "Dolchhagel", S(Attacks.SLight), S(Attacks.SHeavy)),
+            T(Sensensturm.Weapon.Daggers, "Himmelsleiter", S(Attacks.ULight), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir)),
+            T(Sensensturm.Weapon.Staff, "Funkenschlag", S(Attacks.NLight), S(Attacks.SLight)),
+            T(Sensensturm.Weapon.Staff, "Funkenleiter", S(Attacks.ULight), S(Attacks.UAir)),
+            T(Sensensturm.Weapon.Staff, "Aschenkette", S(Attacks.DLight), S(Attacks.SAir)),
+            T(Sensensturm.Weapon.Staff, "Flammengriff-Wurf", S(Attacks.Throw), S(Attacks.ULight), S(Attacks.UAir)),
+            T(Sensensturm.Weapon.Staff, "Feuerstoß", S(Attacks.NLight), S(Attacks.SHeavy)),
+            T(Sensensturm.Weapon.Staff, "Himmelsleiter", S(Attacks.ULight), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir), S(Attacks.UAir)),
         };
 
         public static List<ComboTrial> For(int weapon) { return new List<ComboTrial>(Array.FindAll(All, t => t.Weapon == weapon)); }
