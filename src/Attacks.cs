@@ -59,7 +59,7 @@ namespace Sensensturm
             UHeavy = 17, DashAtk = 18, Ult = 19;
 
         public const int Count = 20;
-        public static readonly AttackDef[][] Sets = new AttackDef[3][];
+        public static readonly AttackDef[][] Sets = new AttackDef[Weapon.Count][];
         static AttackDef[] cur;
         public static AttackDef[] All { get { return Sets[0]; } }
         public static AttackDef[] SetOf(int charId) { return Sets[CharDef.All[charId].Weapon]; }
@@ -97,6 +97,12 @@ namespace Sensensturm
             cur = new AttackDef[Count];
             BuildBow();
             Sets[2] = cur;
+            cur = new AttackDef[Count];
+            BuildDaggers();
+            Sets[3] = cur;
+            cur = new AttackDef[Count];
+            BuildStaff();
+            Sets[4] = cur;
         }
 
         static void BuildScythe()
@@ -220,9 +226,9 @@ namespace Sensensturm
             d.Follow = new Pose(30, 12, 8, 10, 20, 150, 170, 35, 86, 140, 112, 122, 360);
         }
 
-        static void CopyPoses(AttackDef d, int fromId)
+        static void CopyPoses(AttackDef d, int fromId, int fromSet = 0)
         {
-            AttackDef s = Sets[0][fromId];
+            AttackDef s = Sets[fromSet][fromId];
             d.Wind = s.Wind.Copy(); d.Strike = s.Strike.Copy(); d.Follow = s.Follow.Copy();
         }
 
@@ -341,6 +347,78 @@ namespace Sensensturm
             d.ProjKind = 3; d.ProjSpeed = 24f; d.ProjLife = 70; d.ProjDmg = 30f; d.ProjKbB = 11f; d.ProjKbG = 0.14f; d.ProjKbAng = -30; d.Recoil = 7f;
             d.Wind = G(-8, 10, 0, 0, 0, 175, 10, 0); d.Strike = G(-14, 10, 0, 0, 0, 160, 40, 0); d.Follow = G(-10, 8, 0, 10, 10, 150, 40, 5);
         }
+
+        // ================= DOLCHE (Nyx): sehr schnell, kurze Reichweite, Wurfdolch =================
+        static void BuildDaggers()
+        {
+            AttackDef d;
+            d = Mk(NLight, "Doppelstich", 3, 3, 11, 10, -98, 84, 64, 4.5f, 3.4f, 0.028f, -58, 0); CopyPoses(d, NLight);
+            d = Mk(SLight, "Schattenschnitt", 5, 4, 14, 12, -96, 108, 64, 6f, 4.4f, 0.045f, -30, 0); CopyPoses(d, SLight); d.Lunge = 7.5f;
+            d = Mk(ULight, "Klingenwirbel", 5, 5, 15, -46, -190, 124, 118, 5.5f, 10.5f, 0.03f, -90, 0); CopyPoses(d, ULight);
+            d = Mk(DLight, "Fersenschnitt", 4, 6, 14, 10, -44, 112, 76, 5f, 8.5f, 0.026f, -74, 0); CopyPoses(d, DLight, Weapon.Bow);
+            d.ActiveDash = 8f; d.FootTrail = true;
+            d = Mk(NAir, "Klingenrad", 5, 8, 12, -66, -128, 132, 130, 5.5f, 4.3f, 0.035f, -52, A | RA); CopyPoses(d, NAir);
+            d = Mk(SAir, "Luftschnitt", 5, 4, 13, 14, -108, 112, 74, 6.5f, 4.3f, 0.045f, -25, A); CopyPoses(d, SAir);
+            d = Mk(UAir, "Aufwärtsstich", 5, 4, 13, -56, -205, 124, 112, 5.5f, 11.5f, 0.036f, -90, A); CopyPoses(d, UAir);
+            d = Mk(DAir, "Sturzstich", 7, 4, 15, -36, -26, 92, 86, 6.5f, 5f, 0.042f, 76, A); CopyPoses(d, DAir);
+            // Wurfdolch: fliegt schnell und flach, aufladbar
+            d = Mk(SHeavy, "Wurfdolch", 10, 2, 18, 0, 0, 0, 0, 0f, 0f, 0f, 0, H);
+            d.ChargeFrame = 6; d.ChargeMax = 30; d.ProjKind = 4; d.ProjSpeed = 21f; d.ProjLife = 40; d.ProjDmg = 7f; d.ProjKbB = 5.5f; d.ProjKbG = 0.075f; d.ProjKbAng = -25;
+            d.Wind = G(-12, 6, 0, -160, -140, 40, 20, -150); d.Strike = G(18, 8, 5, 5, 0, 140, 160, 0); d.Follow = G(14, 8, 5, 30, 40, 140, 160, 40);
+            d = Mk(NHeavy, "Schattenwirbel", 12, 8, 30, -108, -150, 216, 150, 11f, 6.8f, 0.1f, -60, H | AW); CopyPoses(d, NHeavy);
+            d.ChargeFrame = 6; d.ChargeMax = 40; d.ChargeScale = 1f;
+            d = Mk(DHeavy, "Fußfeger", 10, 5, 26, -120, -46, 240, 50, 10f, 7f, 0.085f, -48, H | AW); CopyPoses(d, DHeavy);
+            d.ChargeFrame = 6; d.ChargeMax = 30; d.ChargeScale = 0.6f;
+            d = Mk(SAirHeavy, "Schattensturz", 12, 6, 22, 14, -132, 132, 124, 11f, 7f, 0.095f, -30, H | A); CopyPoses(d, SAirHeavy);
+            d.ActiveDash = 9f;
+            d = Mk(DAirHeavy, "Klingenregen", 10, 50, 18, -34, -48, 70, 84, 10f, 6f, 0.06f, 62, H | A); CopyPoses(d, DAirHeavy); d.PlungeSpeed = 21f;
+            d = Mk(UAirHeavy, "Schattensprung", 5, 14, 20, -42, -165, 100, 150, 8.5f, 6f, 0.06f, -82, H | A); CopyPoses(d, UAirHeavy); d.RiseSpeed = 17f;
+            d = Mk(Impact, "Klingenaufprall", 1, 4, 15, -95, -46, 190, 48, 7f, 6f, 0.07f, -50, H | AW); CopyPoses(d, Impact);
+            d = Mk(Grab, "Schattengriff", 5, 4, 22, 8, -98, 100, 90, 0f, 0f, 0f, 0, GR); CopyPoses(d, Grab);
+            d = Mk(Throw, "Wurf", 1, 1, 18, 0, 0, 0, 0, 0f, 0f, 0f, 0, 0); CopyPoses(d, Throw);
+            d = Mk(UHeavy, "Mondklinge", 9, 6, 22, -46, -215, 140, 160, 10f, 8.5f, 0.085f, -88, H); CopyPoses(d, UHeavy);
+            d.ChargeFrame = 6; d.ChargeMax = 30; d.ChargeScale = 0.6f;
+            d = Mk(DashAtk, "Schattenschritt", 4, 8, 18, 6, -100, 120, 90, 7f, 5.5f, 0.055f, -32, 0); CopyPoses(d, DashAtk); d.ActiveDash = 18f;
+            // ULTIMATE: Zeitstopp, dann ein Wirbel aus Klingen quer über die Bühne
+            d = Mk(Ult, "Tausend Klingen", 24, 14, 30, -60, -200, 360, 210, 30f, 11f, 0.15f, -40, H); CopyPoses(d, Ult);
+            d.ActiveDash = 20f;
+        }
+
+        // ================= FLAMMENSTAB (Pyros): Feuerbälle auf Distanz, Flammenring =================
+        static void BuildStaff()
+        {
+            AttackDef d;
+            d = Mk(NLight, "Stabstoß", 5, 3, 14, 10, -104, 116, 70, 6f, 3.6f, 0.034f, -58, 0); CopyPoses(d, NLight);
+            d = Mk(SLight, "Glutschwung", 8, 4, 18, 22, -98, 136, 68, 8f, 4.6f, 0.05f, -28, 0); CopyPoses(d, SLight); d.Lunge = 5f;
+            d = Mk(ULight, "Funkenbogen", 7, 5, 18, -50, -195, 142, 125, 7f, 11f, 0.035f, -90, 0); CopyPoses(d, ULight);
+            d = Mk(DLight, "Ascheschlag", 6, 4, 16, 12, -42, 132, 75, 6f, 9f, 0.03f, -72, 0); CopyPoses(d, DLight);
+            d = Mk(NAir, "Flammenrad", 6, 8, 14, -76, -134, 152, 140, 7f, 4.6f, 0.04f, -50, A | RA); CopyPoses(d, NAir);
+            d = Mk(SAir, "Glutstoß", 7, 4, 16, 18, -110, 132, 78, 8f, 4.6f, 0.05f, -25, A); CopyPoses(d, SAir);
+            d = Mk(UAir, "Funkenregen", 6, 5, 16, -65, -210, 140, 115, 7f, 12f, 0.04f, -90, A); CopyPoses(d, UAir);
+            d = Mk(DAir, "Aschesturz", 8, 5, 18, -42, -30, 112, 92, 8f, 5f, 0.046f, 74, A); CopyPoses(d, DAir);
+            // Feuerball: fliegt gerade und langsam, aufladbar
+            d = Mk(SHeavy, "Feuerball", 14, 2, 22, 0, 0, 0, 0, 0f, 0f, 0f, 0, H);
+            d.ChargeFrame = 8; d.ChargeMax = 40; d.ProjKind = 5; d.ProjSpeed = 11f; d.ProjLife = 75; d.ProjDmg = 10f; d.ProjKbB = 6.5f; d.ProjKbG = 0.09f; d.ProjKbAng = -30;
+            d.Wind = G(-14, 8, -5, -150, -130, 40, 20, -120); d.Strike = G(16, 8, 5, 0, -5, 150, 170, -10); d.Follow = G(12, 8, 5, 10, 10, 150, 170, 0);
+            d = Mk(NHeavy, "Flammenring", 16, 7, 38, -125, -165, 250, 170, 14f, 7.2f, 0.106f, -60, H | AW); CopyPoses(d, NHeavy);
+            d.ChargeFrame = 8; d.ChargeMax = 60; d.ChargeScale = 1.25f;
+            d = Mk(DHeavy, "Glutteppich", 16, 6, 30, -150, -52, 300, 56, 13f, 7f, 0.09f, -50, H | AW); CopyPoses(d, DHeavy);
+            d.ChargeFrame = 8; d.ChargeMax = 30; d.ChargeScale = 0.6f;
+            // Feuerball schräg nach unten aus der Luft
+            d = Mk(SAirHeavy, "Feuerregen", 12, 2, 22, 0, 0, 0, 0, 0f, 0f, 0f, 0, H | A);
+            d.ProjKind = 5; d.ProjSpeed = 12f; d.ProjAngle = 22; d.ProjLife = 60; d.ProjDmg = 9f; d.ProjKbB = 6f; d.ProjKbG = 0.08f; d.ProjKbAng = -30; d.Recoil = 4f;
+            d.Wind = Ai(-12, 0, -5, -150, -130, 40, 20, -120); d.Strike = Ai(14, 0, 10, 30, 25, 150, 170, 25); d.Follow = Ai(10, 0, 8, 35, 30, 150, 170, 30);
+            d = Mk(DAirHeavy, "Meteorsturz", 12, 50, 20, -40, -55, 80, 90, 13f, 6f, 0.07f, 62, H | A); CopyPoses(d, DAirHeavy); d.PlungeSpeed = 20f;
+            d = Mk(UAirHeavy, "Phönixaufstieg", 6, 14, 22, -32, -175, 125, 145, 11f, 6f, 0.07f, -80, H | A); CopyPoses(d, UAirHeavy); d.RiseSpeed = 17f;
+            d = Mk(Impact, "Glutaufprall", 1, 4, 18, -130, -52, 260, 54, 11f, 6.5f, 0.08f, -50, H | AW); CopyPoses(d, Impact);
+            d = Mk(Grab, "Flammengriff", 6, 5, 24, 8, -100, 112, 92, 0f, 0f, 0f, 0, GR); CopyPoses(d, Grab);
+            d = Mk(Throw, "Wurf", 1, 1, 20, 0, 0, 0, 0, 0f, 0f, 0f, 0, 0); CopyPoses(d, Throw);
+            d = Mk(UHeavy, "Sonnenbogen", 14, 6, 26, -70, -235, 175, 175, 13f, 8.5f, 0.095f, -86, H); CopyPoses(d, UHeavy);
+            d.ChargeFrame = 8; d.ChargeMax = 40; d.ChargeScale = 0.8f;
+            d = Mk(DashAtk, "Glutsprint", 7, 8, 20, 10, -102, 140, 96, 9f, 6.5f, 0.07f, -35, 0); CopyPoses(d, DashAtk); d.ActiveDash = 13f;
+            // ULTIMATE: Zeitstopp, dann eine Feuerexplosion rund um Pyros
+            d = Mk(Ult, "Inferno", 30, 10, 38, -290, -280, 580, 300, 32f, 11.5f, 0.15f, -60, H | AW); CopyPoses(d, NHeavy);
+        }
     }
 
     // Liefert die aktuelle Pose eines Kämpfers aus seinem Zustand (rein visuell, identisch auf beiden PCs).
@@ -382,6 +460,8 @@ namespace Sensensturm
             int w = CharDef.All[p.charId].Weapon;
             if (w == Weapon.Hammer) r.Scy -= 32;
             else if (w == Weapon.Bow) r.Scy = r.AF2 + 15;
+            else if (w == Weapon.Daggers) r.Scy = r.AF2 - 20; // Klinge zeigt nach vorne
+            else if (w == Weapon.Staff) r.Scy -= 20;
             return r;
         }
 

@@ -5,8 +5,9 @@ namespace Sensensturm
 {
     public static class Weapon
     {
-        public const int Scythe = 0, Hammer = 1, Bow = 2;
-        public static readonly string[] Names = { "Sense", "Hammer", "Bogen" };
+        public const int Scythe = 0, Hammer = 1, Bow = 2, Daggers = 3, Staff = 4;
+        public const int Count = 5;
+        public static readonly string[] Names = { "Sense", "Hammer", "Bogen", "Dolche", "Flammenstab" };
     }
 
     public static class Body
@@ -81,6 +82,34 @@ namespace Sensensturm
                 Cloth = Color.FromArgb(70, 134, 56), ClothDark = Color.FromArgb(40, 84, 38), Leather = Color.FromArgb(200, 168, 116),
                 LeatherDark = Color.FromArgb(106, 66, 38), Hair = Color.FromArgb(112, 68, 36), Trim = Color.FromArgb(222, 186, 96)
             },
+            new CharDef
+            {
+                Name = "Nyx", Title = "Die Schattenklinge", Weapon = Sensensturm.Weapon.Daggers, Body = Sensensturm.Body.Huntress,
+                Desc = "Blitzschnelle Nahkämpferin. Kurze Reichweite, aber endlose Combos.",
+                Special = "Wurfdolch, Schattenschritt aus dem Lauf, sehr schnelle leichte Angriffe",
+                Speed = 1.14f, Jump = 1.1f, Grav = 1f, Weight = 1.16f,
+                StatSpeed = 5, StatPower = 2, StatWeight = 1, StatRange = 1,
+                Bone = Color.FromArgb(58, 48, 78), Shade = Color.FromArgb(36, 30, 52), Outline = Color.FromArgb(14, 10, 20),
+                Glow = Color.FromArgb(255, 70, 110), Eye = Color.FromArgb(255, 240, 245), Shaft = Color.FromArgb(40, 32, 44),
+                Blade = Color.FromArgb(196, 200, 214), Edge = Color.FromArgb(255, 110, 140), ShieldFace = Color.FromArgb(48, 36, 60), Rim = Color.FromArgb(190, 60, 96),
+                Skin = Color.FromArgb(232, 206, 196),
+                Cloth = Color.FromArgb(54, 44, 74), ClothDark = Color.FromArgb(30, 24, 42), Leather = Color.FromArgb(92, 64, 72),
+                LeatherDark = Color.FromArgb(40, 28, 36), Hair = Color.FromArgb(236, 236, 244), Trim = Color.FromArgb(200, 60, 96)
+            },
+            new CharDef
+            {
+                Name = "Pyros", Title = "Der Aschenmagier", Weapon = Sensensturm.Weapon.Staff, Body = Sensensturm.Body.Skeleton,
+                Desc = "Feuermagier, der den Gegner mit Feuerbällen auf Abstand hält.",
+                Special = "Fliegende Feuerbälle, Flammenring, Inferno-Ultimate rund um sich",
+                Speed = 0.94f, Jump = 0.97f, Grav = 0.94f, Weight = 0.98f,
+                StatSpeed = 2, StatPower = 4, StatWeight = 3, StatRange = 5,
+                Bone = Color.FromArgb(222, 206, 184), Shade = Color.FromArgb(156, 134, 114), Outline = Color.FromArgb(30, 14, 10),
+                Glow = Color.FromArgb(255, 140, 40), Eye = Color.FromArgb(255, 244, 200), Shaft = Color.FromArgb(70, 40, 30),
+                Blade = Color.FromArgb(176, 128, 84), Edge = Color.FromArgb(255, 210, 90), ShieldFace = Color.FromArgb(110, 36, 24), Rim = Color.FromArgb(230, 170, 90),
+                Skin = Color.FromArgb(222, 206, 184),
+                Cloth = Color.FromArgb(140, 34, 24), ClothDark = Color.FromArgb(66, 20, 18), Leather = Color.FromArgb(92, 56, 36),
+                LeatherDark = Color.FromArgb(34, 22, 20), Trim = Color.FromArgb(236, 180, 80), EyeAura = Color.FromArgb(255, 120, 30)
+            },
         };
 
         public static int Count { get { return All.Length; } }
@@ -122,6 +151,20 @@ namespace Sensensturm
                 c.Glow = Color.FromArgb(205, 150, 255); c.Edge = Color.FromArgb(205, 150, 255);
                 c.Cloth = Color.FromArgb(112, 72, 162); c.ClothDark = Color.FromArgb(62, 42, 102); c.Hair = Color.FromArgb(222, 222, 236);
                 c.Trim = Color.FromArgb(205, 205, 232); c.ShieldFace = Color.FromArgb(70, 50, 100);
+            }),
+            All[4].With("Mitternacht", c =>
+            {
+                c.Bone = Color.FromArgb(40, 60, 92); c.Shade = Color.FromArgb(26, 40, 64);
+                c.Glow = Color.FromArgb(90, 220, 255); c.Edge = Color.FromArgb(120, 230, 255);
+                c.Cloth = Color.FromArgb(30, 52, 84); c.ClothDark = Color.FromArgb(18, 28, 48); c.Hair = Color.FromArgb(34, 34, 46);
+                c.Trim = Color.FromArgb(90, 200, 240); c.Rim = c.Trim; c.ShieldFace = Color.FromArgb(26, 44, 70);
+            }),
+            All[5].With("Blaufeuer", c =>
+            {
+                c.Glow = Color.FromArgb(90, 170, 255); c.EyeAura = Color.FromArgb(80, 150, 255); c.Eye = Color.FromArgb(225, 240, 255);
+                c.Edge = Color.FromArgb(150, 210, 255); c.Blade = Color.FromArgb(150, 160, 180);
+                c.Cloth = Color.FromArgb(36, 58, 128); c.ClothDark = Color.FromArgb(22, 30, 64); c.ShieldFace = Color.FromArgb(30, 50, 110);
+                c.Trim = Color.FromArgb(180, 210, 240); c.Rim = c.Trim;
             }),
         };
 

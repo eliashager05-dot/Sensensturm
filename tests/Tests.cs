@@ -125,7 +125,7 @@ namespace Sensensturm
         static int TestAttacks()
         {
             int f = 0;
-            foreach (int ch in new[] { 0, 2, 3 }) f += TestAttacksFor(ch);
+            foreach (int ch in new[] { 0, 2, 3, 4, 5 }) f += TestAttacksFor(ch);
             return f;
         }
 
@@ -536,7 +536,7 @@ namespace Sensensturm
         static int TestCombos()
         {
             int f = 0;
-            foreach (int ch in new[] { 0, 2, 3 }) { comboChar = ch; f += TestCombosFor(ch); }
+            foreach (int ch in new[] { 0, 2, 3, 4, 5 }) { comboChar = ch; f += TestCombosFor(ch); }
             comboChar = 0;
             return f;
         }
@@ -570,7 +570,23 @@ namespace Sensensturm
                 new { Name = "Rankenwurf", X = 170f, Steps = new[] { At(Btn.Grab, 0), OnGrab(D), OnHit(U | L), OnHitHold(J, 8), At(U | L, 4) }, Need = 3 },
                 new { Name = "Pfeilhagel", X = 80f, Steps = new[] { At(R | L, 0), OnHit(R | H) }, Need = 2 },
             };
-            var combos = w == Weapon.Hammer ? hammer : w == Weapon.Bow ? bow : scythe;
+            var daggers = new[]
+            {
+                new { Name = "Schattenhatz", X = 60f, Steps = new[] { At(L, 0), OnHit(R | L) }, Need = 2 },
+                new { Name = "Klingenaufstieg", X = 40f, Steps = new[] { At(U | L, 0), OnHitHold(J, 8), At(U | L, 4) }, Need = 2 },
+                new { Name = "Fersenfalle", X = 80f, Steps = new[] { At(D | L, 0), OnHitHold(J, 8), At(R | L, 4) }, Need = 2 },
+                new { Name = "Schattengriff-Wurf", X = 80f, Steps = new[] { At(Btn.Grab, 0), OnGrab(D), OnHit(U | L), OnHitHold(J, 8), At(U | L, 4) }, Need = 3 },
+                new { Name = "Dolchhagel", X = 70f, Steps = new[] { At(R | L, 0), OnHit(R | H) }, Need = 2 },
+            };
+            var staff = new[]
+            {
+                new { Name = "Funkenschlag", X = 70f, Steps = new[] { At(L, 0), OnHit(R | L) }, Need = 2 },
+                new { Name = "Funkenleiter", X = 50f, Steps = new[] { At(U | L, 0), OnHitHold(J, 8), At(U | L, 4) }, Need = 2 },
+                new { Name = "Aschenkette", X = 90f, Steps = new[] { At(D | L, 0), OnHitHold(J, 8), At(R | L, 4) }, Need = 2 },
+                new { Name = "Flammengriff-Wurf", X = 80f, Steps = new[] { At(Btn.Grab, 0), OnGrab(D), OnHit(U | L), OnHitHold(J, 8), At(U | L, 4) }, Need = 3 },
+                new { Name = "Feuerstoß", X = 70f, Steps = new[] { At(L, 0), OnHit(R | H) }, Need = 2 },
+            };
+            var combos = w == Weapon.Hammer ? hammer : w == Weapon.Bow ? bow : w == Weapon.Daggers ? daggers : w == Weapon.Staff ? staff : scythe;
             var trials = ComboTrial.For(w);
             var trk = new TrainingTracker();
             foreach (var c in combos)
@@ -1011,9 +1027,9 @@ namespace Sensensturm
                 Shot(r, s, "shot_mirror" + mc, new[] { "Spieler 1", "Spieler 2" });
             }
             // Ultimate beim Ausholen (Zeitstopp) und kurz nach dem Einschlag
-            foreach (int uc in new[] { 0, 2, 3 })
+            foreach (int uc in new[] { 0, 2, 3, 4, 5 })
             {
-                s = GameState.NewMatch(uc, 1, 3, 0, uc == 0 ? 1 : uc == 2 ? 2 : 3); s.phase = GameState.Fight; s.phaseTimer = 0;
+                s = GameState.NewMatch(uc, 1, 3, 0, uc == 0 || uc == 4 ? 1 : uc == 2 || uc == 5 ? 2 : 3); s.phase = GameState.Fight; s.phaseTimer = 0;
                 s.p[0].x = -150; s.p[1].x = uc == 3 ? 350 : 60; s.p[1].facing = -1;
                 s.p[0].ult = Tuning.UltMax; s.p[1].ult = 64;
                 r.ClearFx();
@@ -1027,6 +1043,23 @@ namespace Sensensturm
                     if (t == ultFrames - 8) Shot(r, s, "shot_ult" + uc + "_wind", names);
                 }
                 Shot(r, s, "shot_ult" + uc + "_strike", names);
+            }
+            // Wurfdolch und Feuerball im Flug
+            foreach (int pc in new[] { 4, 5 })
+            {
+                s = GameState.NewMatch(pc, 3, 3, 0, 0); s.phase = GameState.Fight; s.phaseTimer = 0;
+                s.p[0].x = -250; s.p[1].x = 300; s.p[1].facing = -1;
+                r.ClearFx();
+                int st = Attacks.SetOf(pc)[Attacks.SHeavy].Startup;
+                for (int t = 0; t < st + 10; t++)
+                {
+                    ev.Clear();
+                    int h = t < 2 ? Btn.Heavy | Btn.Right : 0;
+                    Sim.Step(s, new[] { h, 0 }, new[] { t == 0 ? h : 0, 0 }, ev, false);
+                    foreach (var e in ev) r.OnEvent(e, s);
+                    r.Tick(); r.UpdateCamera(s);
+                }
+                Shot(r, s, "shot_proj" + pc, names);
             }
             var game = new Game();
             for (int i = 0; i < 5; i++) game.Tick();
@@ -1113,7 +1146,8 @@ namespace Sensensturm
             {
                 g.Clear(Color.FromArgb(28, 20, 40));
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                for (int c = 0; c < CharDef.Count; c++) { r.DrawVictory(g, c, 160 + c * 320, 600, 1.75f, 60); r.DrawVictory(g, c, 160 + c * 320, 250, 0.9f, 6); }
+                float colW = 1280f / CharDef.Count;
+                for (int c = 0; c < CharDef.Count; c++) { r.DrawVictory(g, c, colW * (c + 0.5f), 600, 1.4f, 60); r.DrawVictory(g, c, colW * (c + 0.5f), 250, 0.8f, 6); }
                 bmp.Save(System.IO.Path.Combine(outDir, "shot_victory_poses.png"), ImageFormat.Png);
             }
             // Siegerbildschirm nach einem CPU-Match über 3 Leben

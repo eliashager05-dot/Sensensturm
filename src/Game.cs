@@ -454,7 +454,7 @@ namespace Sensensturm
                     BuildReplayItems();
                     break;
                 case Scr.Combos:
-                    Add("Waffe", Weapon.Names[comboWeapon], null, d => comboWeapon = ((comboWeapon + d) % 3 + 3) % 3);
+                    Add("Waffe", Weapon.Names[comboWeapon], null, d => comboWeapon = ((comboWeapon + d) % Weapon.Count + Weapon.Count) % Weapon.Count);
                     Add("Im Training üben", null, () =>
                     {
                         if (CharDef.All[Settings.P1Char].Weapon != comboWeapon)
@@ -1217,6 +1217,32 @@ namespace Sensensturm
                     new[] { "Pfeilhagel", "Schwer", F + "+" + L + a + F + "+" + H + " (Sternenpfeil)", "Tritt, dann sofort der Pfeil hinterher – PERFEKT nötig." },
                     new[] { "Himmelsleiter  (ENDLOS)", "Meister", ladder, "Leicht und schnell: Lyras Leiter ist die schnellste." },
                     new[] { "Rettung (Recovery)", "Pflicht", rescue, "Sternensprung trägt besonders hoch." },
+                };
+            if (w == Weapon.Daggers)
+                return new[]
+                {
+                    new[] { "Schattenschritt · Mondklinge", "Neu", moves, "Blitzschneller Vorstoß aus dem Lauf · aufladbarer Klingenschnitt nach oben." },
+                    new[] { "ULTIMATE: Tausend Klingen", "Ultimate", L + a + F + "+" + L + a + Ul + "   (Leiste voll)", "Zeitstopp, dann rast Nyx mit einem Klingenwirbel quer über die Bühne." },
+                    new[] { "Schattenhatz", "Leicht", L + a + F + "+" + L, "Doppelstich direkt in den Schattenschnitt." },
+                    new[] { "Klingenaufstieg", "Mittel", U + "+" + L + a + J + a + U + "+" + L, "Klingenwirbel nach oben, Aufwärtsstich hinterher." },
+                    new[] { "Fersenfalle", "Mittel", Dn + "+" + L + a + J + a + F + "+" + L, "Unter den Gegner gleiten, nachspringen, Luftschnitt." },
+                    new[] { "Schattengriff-Wurf", "Mittel", G + a + Dn + " (Wurf unten)" + a + U + "+" + L + a + J + a + U + "+" + L, "Packen, zu Boden werfen, hochschneiden." },
+                    new[] { "Dolchhagel", "Schwer", F + "+" + L + a + F + "+" + H + " (Wurfdolch)", "Schnitt, dann sofort den Dolch hinterherwerfen – PERFEKT nötig." },
+                    new[] { "Himmelsleiter  (ENDLOS)", "Meister", ladder, "Nyx' Angriffe sind so schnell, dass die Leiter fast von allein läuft." },
+                    new[] { "Rettung (Recovery)", "Pflicht", rescue, "Leicht und flink – aber sie fliegt auch weit." },
+                };
+            if (w == Weapon.Staff)
+                return new[]
+                {
+                    new[] { "Glutsprint · Sonnenbogen", "Neu", moves, "Angriff aus dem Lauf · aufladbarer Feuerbogen nach oben." },
+                    new[] { "ULTIMATE: Inferno", "Ultimate", L + a + Ul + "   (Leiste voll)", "Zeitstopp, dann explodiert alles rund um Pyros. Zerbricht jeden Schild." },
+                    new[] { "Funkenschlag", "Leicht", L + a + F + "+" + L, "Stabstoß direkt in den Glutschwung." },
+                    new[] { "Funkenleiter", "Mittel", U + "+" + L + a + J + a + U + "+" + L, "Funkenbogen nach oben, Funkenregen hinterher." },
+                    new[] { "Aschenkette", "Mittel", Dn + "+" + L + a + J + a + F + "+" + L, "Vom Ascheschlag in die Luft zum Glutstoß." },
+                    new[] { "Flammengriff-Wurf", "Mittel", G + a + Dn + " (Wurf unten)" + a + U + "+" + L + a + J + a + U + "+" + L, "Packen, zu Boden werfen, hochschleudern." },
+                    new[] { "Feuerstoß", "Schwer", L + a + F + "+" + H + " (Feuerball)", "Kurzer Stoß, dann der Feuerball aus nächster Nähe – PERFEKT nötig." },
+                    new[] { "Himmelsleiter  (ENDLOS)", "Meister", ladder, "Auch der Magier kann endlos, wenn das Timing stimmt." },
+                    new[] { "Rettung (Recovery)", "Pflicht", rescue, "Pyros schwebt etwas länger – Phönixaufstieg nicht zu früh zünden." },
                 };
             return new[]
             {

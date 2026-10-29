@@ -102,7 +102,7 @@ namespace Sensensturm
             if (P.ult >= Tuning.UltMax && O.invuln == 0 && O.state != St.Respawn)
             {
                 int w = CharDef.All[P.charId].Weapon;
-                float range = w == Weapon.Bow ? 700 : w == Weapon.Hammer ? 300 : 260;
+                float range = w == Weapon.Bow ? 700 : w == Weapon.Hammer ? 300 : w == Weapon.Staff ? 290 : w == Weapon.Daggers ? 330 : 260;
                 if (adx < range && Math.Abs(dy) < (w == Weapon.Bow ? 70 : 130) && rng.Next(level == 3 ? 2 : 5) == 0)
                 {
                     Finish(h | toward | Btn.Ult, out held, out pressed);

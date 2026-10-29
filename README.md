@@ -1,12 +1,14 @@
 # Sensensturm
 
-2D-Plattform-Kampfspiel (Brawlhalla-ähnliches Spielprinzip) mit 4 Kämpfern und 3 Waffentypen:
+2D-Plattform-Kampfspiel (Brawlhalla-ähnliches Spielprinzip) mit 6 Kämpfern und 5 Waffentypen:
 
 | Kämpfer | Typ | Stil |
 |---|---|---|
 | Lila Skelett / Blaues Skelett | **Sense** | Allrounder, große Reichweite, flüssige Luft-Combos |
 | **Brokk, der Steinwächter** (Golem) | **Hammer** | langsam und schwer, extrem harte Treffer, **Super-Rüstung** beim Ausholen schwerer Angriffe (wird nicht unterbrochen), **Bebenwelle** rollt über den Boden |
 | **Lyra, die Sternenschützin** (Jägerin) | **Bogen** | schnell und leicht, Tritt-Combos, **aufladbare Sternenpfeile** (vorwärts, schräg nach oben, aus der Luft mit Rückstoß), **Rankenseil** greift aus großer Entfernung |
+| **Nyx, die Schattenklinge** (Jägerin) | **Dolche** | der schnellste Kämpfer, sehr leicht, kurze Reichweite, blitzschnelle leichte Angriffe, **Wurfdolch**, **Schattenschritt** aus dem Lauf, Ultimate *Tausend Klingen* |
+| **Pyros, der Aschenmagier** (Skelett) | **Flammenstab** | langsamer Zauberer, hält Gegner mit geradeaus fliegenden **Feuerbällen** auf Abstand (auch schräg aus der Luft), **Flammenring**, Ultimate *Inferno* explodiert rund um ihn |
 
 Jeder Typ hat ein eigenes Moveset (16 Angriffe + Griff/Wurf + Ultimate) und eigene Werte für Tempo, Sprungkraft, Fallgeschwindigkeit und Gewicht. Die Auswahl erfolgt unter „Lokal spielen“ bzw. in der LAN-Lobby (beide Spieler wählen selbst). Combos für jeden Typ stehen unter *Extras > Combos lernen* (Links/Rechts wechselt die Waffe) und im Kampf jederzeit mit **F1** (Controller: *Back*) oder über *Pause > Combos ansehen*.
 Alle Grafiken werden im Code gezeichnet, alle Sounds werden synthetisiert. Es gibt keine fremden Assets.
@@ -27,7 +29,7 @@ Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensenst
 
 Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 
-**Spiegelduelle:** Wählen beide Spieler denselben Kämpfer (lokal und im Turnier), bekommt Spieler 2 automatisch eine Farbvariante: *Glut* (Lila Skelett), *Gift* (Blaues Skelett), *Frost* (Brokk) und *Mondjägerin* (Lyra).
+**Spiegelduelle:** Wählen beide Spieler denselben Kämpfer (lokal und im Turnier), bekommt Spieler 2 automatisch eine Farbvariante: *Glut* (Lila Skelett), *Gift* (Blaues Skelett), *Frost* (Brokk), *Mondjägerin* (Lyra), *Mitternacht* (Nyx) und *Blaufeuer* (Pyros).
 
 **CPU-Gegner:** Leicht, mittel und schwer unterscheiden sich in Reaktion, Tempo und Combos. Hat der Gegner viel Schaden, spielt die CPU gezielt auf K.O.: Sie setzt starke Angriffe ein, bewacht die Kante und schlägt Gegner beim Zurückkommen wieder hinaus. Sich selbst rettet sie mit Sprüngen, Wandsprüngen, Aufschwung und Luft-Dodge.
 
