@@ -145,7 +145,7 @@ namespace Sensensturm
                             game.Render(buffer.Graphics, bufSize.Width, bufSize.Height);
                             buffer.Render();
                         }
-                        catch (Exception ex) { Debug.WriteLine(ex); }
+                        catch (Exception ex) { LogError("Zeichnen", ex); }
                         frames++;
                         if (now - fpsT >= 1) { game.Fps = frames; frames = 0; fpsT = now; }
                     }
@@ -158,6 +158,21 @@ namespace Sensensturm
                 timeEndPeriod(1);
             }
             if (!IsDisposed) Close();
+        }
+
+        // Fehler in fehler.log neben der .exe festhalten (jeden unterschiedlichen nur einmal), damit man sie melden kann
+        readonly System.Collections.Generic.HashSet<string> logged = new System.Collections.Generic.HashSet<string>();
+        void LogError(string where, Exception ex)
+        {
+            Debug.WriteLine(ex);
+            string key = where + ex.GetType().Name + ex.StackTrace;
+            if (logged.Count > 20 || !logged.Add(key)) return;
+            try
+            {
+                System.IO.File.AppendAllText(System.IO.Path.Combine(Application.StartupPath, "fehler.log"),
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + where + ": " + ex + Environment.NewLine + Environment.NewLine);
+            }
+            catch { }
         }
     }
 }
