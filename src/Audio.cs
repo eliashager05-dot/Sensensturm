@@ -5,7 +5,8 @@ using System.Threading;
 
 namespace Sensensturm
 {
-    public enum Sfx { Swing, SwingHeavy, Hit, HitHeavy, Block, Parry, Break, KO, Jump, AirJump, Land, Dash, Dodge, Clank, Menu, Select, Beep, Go, Charge, Shock, Ult, Count }
+    public enum Sfx { Swing, SwingHeavy, Hit, HitHeavy, Block, Parry, Break, KO, Jump, AirJump, Land, Dash, Dodge, Clank, Menu, Select, Beep, Go, Charge, Shock, Ult,
+        ScreamReaper, ScreamFrost, ScreamGolem, ScreamArcher, ScreamShadow, ScreamMage, Count }
 
     // Kleiner Software-Mixer über waveOut. Alle Klänge werden beim Start synthetisiert (keine Dateien nötig).
     // Die Hintergrundmusik (Music.cs) wird im selben Thread live dazugemischt.
@@ -35,6 +36,13 @@ namespace Sensensturm
         static volatile bool running;
         static readonly Random rng = new Random(7);
         public static float Volume = 0.8f;
+        // Zeitlupe (letzter K.O.): alle Klänge tiefer und langsamer
+        public static float PitchScale = 1f;
+
+        // K.-o.-Schrei je Kämpfer (Index = CharDef.All)
+        static readonly Sfx[] screams = { Sfx.ScreamReaper, Sfx.ScreamFrost, Sfx.ScreamGolem, Sfx.ScreamArcher, Sfx.ScreamShadow, Sfx.ScreamMage };
+        public static Sfx Scream(int charId) { return screams[((charId % screams.Length) + screams.Length) % screams.Length]; }
+        public static float[] Clip(Sfx s) { return clips[(int)s]; }
 
         public static void Init()
         {
@@ -74,7 +82,7 @@ namespace Sensensturm
             lock (lk)
             {
                 if (voices.Count > 24) voices.RemoveAt(0);
-                voices.Add(new Voice { D = d, Pos = 0, Rate = pitch * (0.97 + rng.NextDouble() * 0.06), Vol = vol });
+                voices.Add(new Voice { D = d, Pos = 0, Rate = pitch * PitchScale * (0.97 + rng.NextDouble() * 0.06), Vol = vol });
             }
         }
 
@@ -210,6 +218,51 @@ namespace Sensensturm
             return b;
         }
 
+        // Vokale als Formanten (F1, F2, F3 in Hz)
+        static readonly float[] VA = { 800, 1200, 2600 }, VO = { 500, 850, 2500 }, VU = { 340, 800, 2400 }, VE = { 550, 1800, 2600 }, VAE = { 700, 1650, 2500 };
+
+        static float[] Sc(float[] v, float k) { return new[] { v[0] * k, v[1] * k, v[2] * k }; }
+
+        // Schrei aus dem Synthesizer: Sägezahn-Stimme mit Tonhöhenverlauf (Anstieg, dann Abfall beim Wegfliegen),
+        // drei Formantfilter, die von Vokal a zu Vokal b gleiten, dazu Heiserkeit (Rauschen), Knochenklappern und Verzerrung.
+        static float[] Scream(float sec, float f0a, float f0b, float f0c, float[] va, float[] vb, float rasp, float rattle, float vib, float drive, float vol)
+        {
+            var b = Buf(sec);
+            double ph = 0;
+            float[] y1 = new float[3], y2 = new float[3];
+            float jit = 0, peak = 0;
+            for (int i = 0; i < b.Length; i++)
+            {
+                float t = i / (float)b.Length, tm = i / (float)Rate;
+                float f0 = t < 0.14f ? f0a + (f0b - f0a) * (t / 0.14f) : f0b + (f0c - f0b) * (float)Math.Pow((t - 0.14f) / 0.86f, 0.8);
+                jit += (Noise() - jit) * 0.02f;
+                f0 *= 1 + vib * (float)Math.Sin(2 * Math.PI * 6.3 * tm) * Math.Min(1f, t * 4) + jit * 0.03f;
+                ph += f0 / Rate;
+                float src = (float)(2 * (ph - Math.Floor(ph)) - 1);
+                src = src * (1 - rasp) + Noise() * rasp * 1.4f;
+                if (rattle > 0)
+                {
+                    float clack = (float)Math.Sin(2 * Math.PI * 23 * tm);
+                    src *= 1 - rattle * 0.45f * (clack > 0 ? 1 : 0);
+                }
+                float o = 0;
+                for (int k = 0; k < 3; k++)
+                {
+                    float F = va[k] + (vb[k] - va[k]) * t, bw = 90 + 60 * k;
+                    double r = Math.Exp(-Math.PI * bw / Rate);
+                    float c1 = (float)(2 * r * Math.Cos(2 * Math.PI * F / Rate)), c2 = (float)(-r * r);
+                    float y = src * (float)(1 - r) + c1 * y1[k] + c2 * y2[k];
+                    y2[k] = y1[k]; y1[k] = y;
+                    o += y * (k == 0 ? 1f : k == 1 ? 0.6f : 0.3f);
+                }
+                float env = Math.Min(1f, tm / 0.025f) * (float)Math.Pow(1 - t, 1.3);
+                b[i] = (float)Math.Tanh(o * drive) * env;
+                peak = Math.Max(peak, Math.Abs(b[i]));
+            }
+            if (peak > 0) for (int i = 0; i < b.Length; i++) b[i] *= vol / peak;
+            return b;
+        }
+
         static void Generate()
         {
             clips[(int)Sfx.Swing] = Whoosh(0.16f, 0.35f, 0.08f, 0.45f);
@@ -232,6 +285,13 @@ namespace Sensensturm
             clips[(int)Sfx.Go] = Mix(Tone(0.45f, 780, 780, 0.3f, true), Tone(0.45f, 1040, 1040, 0.2f, true));
             clips[(int)Sfx.Charge] = Bell(0.3f, new float[] { 1760, 2640 }, 10, 0.3f, 0.2f);
             clips[(int)Sfx.Shock] = Thump(0.35f, 80, 40, 2f, 0.7f, 3f);
+            // K.-o.-Schreie: jeder Kämpfer mit eigener Stimme
+            clips[(int)Sfx.ScreamReaper] = Mix(Scream(1.1f, 290, 380, 150, VA, VU, 0.38f, 1f, 0.03f, 2.2f, 0.5f), Whoosh(1.0f, 0.08f, 0.02f, 0.12f));
+            clips[(int)Sfx.ScreamFrost] = Mix(Scream(1.05f, 350, 470, 200, VE, VU, 0.28f, 0.6f, 0.035f, 2f, 0.46f), Bell(0.9f, new float[] { 2637, 3520, 4186 }, 4f, 0.1f, 0.3f));
+            clips[(int)Sfx.ScreamGolem] = Mix(Scream(1.25f, 92, 125, 52, Sc(VO, 0.72f), Sc(VU, 0.72f), 0.5f, 0f, 0.02f, 3.5f, 0.6f), Thump(0.9f, 70, 30, 2.2f, 0.45f, 3f));
+            clips[(int)Sfx.ScreamArcher] = Scream(0.95f, 470, 630, 320, Sc(VA, 1.15f), Sc(VO, 1.15f), 0.08f, 0f, 0.028f, 1.6f, 0.48f);
+            clips[(int)Sfx.ScreamShadow] = Scream(0.75f, 560, 720, 380, Sc(VAE, 1.15f), Sc(VA, 1.15f), 0.13f, 0f, 0.02f, 1.8f, 0.46f);
+            clips[(int)Sfx.ScreamMage] = Mix(Scream(1.1f, 195, 265, 105, VA, VO, 0.45f, 0.4f, 0.04f, 2.6f, 0.5f), Whoosh(1.1f, 0.5f, 0.15f, 0.3f));
             clips[(int)Sfx.Ult] = Mix(Bell(1.3f, new float[] { 440, 660, 880, 1320 }, 2.2f, 0.32f, 0.8f), Tone(0.8f, 160, 1400, 0.16f, false), Whoosh(0.9f, 0.15f, 0.9f, 0.4f), Thump(0.5f, 90, 40, 1.8f, 0.6f, 3f));
         }
     }

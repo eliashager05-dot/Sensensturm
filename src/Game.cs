@@ -204,6 +204,7 @@ namespace Sensensturm
 
             if (scr == Scr.Match) { if (replay != null) TickReplay(); else TickMatch(); }
             else TickMenus();
+            TickKoCam();
 
             UpdateMusic();
             R.Tick();
@@ -596,6 +597,7 @@ namespace Sensensturm
                 if (client != null) { client.InResults = client.MyVote = false; client.ReplayData = null; }
             }
             R.ClearFx();
+            ResetKoCam();
             BeginRecording();
             R.SnapCamera(state);
             scr = Scr.Match;
@@ -682,10 +684,10 @@ namespace Sensensturm
 
         void TickMatch()
         {
-            bool over = state.phase == GameState.Over && state.phaseTimer > 100;
+            bool over = state.phase == GameState.Over && state.phaseTimer > 100 && !KoCamActive;
             if (over) comboView = false;
             if (comboView) ComboViewInput();
-            else if (!over && In.Menu.Contains(MenuKey.Combos)) { OpenComboView(); In.Menu.Clear(); }
+            else if (!over && !KoCamActive && In.Menu.Contains(MenuKey.Combos)) { OpenComboView(); In.Menu.Clear(); }
             bool pausePressed = In.Menu.Contains(MenuKey.Pause);
 
             if (over)
@@ -695,7 +697,7 @@ namespace Sensensturm
                 if (mode == Mode.Client) TakeClientReplay();
                 if (TryStartRematch()) return;
             }
-            else if (pausePressed) { paused = !paused; pauseSel = 0; Audio.Play(Sfx.Select, 0.6f); In.Menu.Clear(); }
+            else if (pausePressed && !KoCamActive) { paused = !paused; pauseSel = 0; Audio.Play(Sfx.Select, 0.6f); In.Menu.Clear(); }
 
             bool menuOpen = paused || over || comboView;
             if ((paused || over) && !comboView) MatchMenu(over);
@@ -840,26 +842,28 @@ namespace Sensensturm
             itemRects.Clear();
             if (scr == Scr.Match && state != null && replay != null)
             {
-                R.DrawWorld(g, state, false);
+                R.DrawWorld(g, ShownState, false);
                 R.UltKeys[0] = R.UltKeys[1] = "";
-                R.DrawHud(g, state, names);
+                if (KoCamActive) R.DrawLetterbox(g);
+                else R.DrawHud(g, state, names);
                 DrawReplayOverlay(g);
             }
             else if (scr == Scr.Match && state != null)
             {
-                R.DrawWorld(g, state, Settings.ShowHitboxes);
+                R.DrawWorld(g, ShownState, Settings.ShowHitboxes && !KoCamActive);
                 // Ultimate-Taste nur für Spieler an diesem PC anzeigen
                 bool twoLocal = mode == Mode.Local && bot == null && !training;
                 bool spectating = mode == Mode.Client && client != null && client.Spectator;
                 R.UltKeys[0] = mode == Mode.Client || bot0 != null ? "" : K(Btn.UltIndex, 0);
                 R.UltKeys[1] = spectating ? "" : mode == Mode.Client ? K(Btn.UltIndex, 0) : twoLocal ? K(Btn.UltIndex, 1) : "";
-                bool over = state.phase == GameState.Over && state.phaseTimer > 100;
-                if (!over) R.DrawHud(g, state, names);
+                bool over = state.phase == GameState.Over && state.phaseTimer > 100 && !KoCamActive;
+                if (KoCamActive) R.DrawLetterbox(g);
+                else if (!over) R.DrawHud(g, state, names);
                 if (training) DrawTrainingHud(g);
                 if (spectating && !over) R.Shadowed(g, "ZUSCHAUER", R.FHudName, Color.FromArgb(200, 210, 200, 235), Renderer.VW / 2f, state.timeLeft >= 0 ? 64 : 14, true);
                 if (state.phase == GameState.Countdown && !comboView)
                     R.Shadowed(g, "F1 / Controller-Back: Combos & Angriffe ansehen", R.FSmall, Color.FromArgb(220, 230, 220, 255), Renderer.VW / 2f, 74, true);
-                if (state.phase == GameState.Over && !over)
+                if (state.phase == GameState.Over && !over && !KoCamActive)
                     R.Shadowed(g, "SPIEL VORBEI", R.FTitle, Color.White, Renderer.VW / 2f, 250, true);
                 if (over) DrawResults(g);
                 else if (paused && !comboView) { if (training) DrawTrainingPause(g); else DrawPause(g); }
@@ -1330,7 +1334,7 @@ namespace Sensensturm
             bool intense = false, duck = false;
             if (scr == Scr.Match && state != null)
             {
-                if (state.phase == GameState.Over) want = state.phaseTimer < 45 ? Song.None : Song.Victory;
+                if (state.phase == GameState.Over) want = state.phaseTimer < 45 || KoCamActive ? Song.None : Song.Victory;
                 else
                 {
                     want = Music.ForStage(state.stage);
@@ -1358,7 +1362,7 @@ namespace Sensensturm
             tourMatch = false;
             names[0] = "Spieler 1"; names[1] = "CPU";
             BeginMatch(GameState.NewMatch(c0, c1, stocks, 3, 1));
-            for (int i = 0; i < 60 * 60 * 4 && !(state.phase == GameState.Over && state.phaseTimer > 100); i++) Tick();
+            for (int i = 0; i < 60 * 60 * 4 && !(state.phase == GameState.Over && state.phaseTimer > 100 && !KoCamActive); i++) Tick();
         }
         public void DebugComboView() { StartLocal(); OpenComboView(); }
 

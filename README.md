@@ -52,6 +52,12 @@ Neu bauen: `build.bat` (verwendet den in Windows eingebauten C#-Compiler).
 ## Siegerbildschirm
 Nach jedem Match reißt der Sieger seine Waffe hoch, sagt einen Siegesspruch und bekommt **Auszeichnungen** (z. B. *Makellos* ohne Lebensverlust, *Aufholjagd* nach Rückstand, *Blitzsieg* unter einer Minute, *Combo-Meister*, *Perfektionist*, *Eiserne Wand*, *Ultimative Macht*). Daneben stehen beide Kämpfer im Vergleich: verursachter Schaden, Treffer, längste Combo, PERFEKT-Treffer, Paraden, K.O.s und Ultimates, dazu die Kampfdauer und ein Diagramm **Schaden im Verlauf** mit allen K.O.s. Darunter liegen Revanche, Wiederholung und Speichern.
 
+## Spielgefühl
+- **Zeitlupe beim letzten K.O.:** Der entscheidende Treffer und der Flug laufen noch einmal in Zeitlupe ab. Die Kamera zoomt auf den Verlierer, dazu Kinobalken und tiefere, langsamere Klänge. Danach folgt die K.-o.-Explosion in Echtzeit, dann der Siegerbildschirm. Esc/Start überspringt die Zeitlupe. Sie ist rein optisch: Simulation, Online-Spiel und Wiederholungen laufen unverändert weiter.
+- **Harte Landungen:** Schnellfallen auf den Boden, in den Boden geschmettert werden und die Bodenschläge (Erdspalter, Fallbeil) wirbeln eine Staubwelle und Steinsplitter auf und reißen den Boden auf. Die Risse verblassen nach einigen Sekunden. Brokk ist so schwer, dass schon schnelle normale Landungen Risse hinterlassen.
+- **K.-o.-Schreie:** Jeder Kämpfer hat einen eigenen, synthetisierten Schrei, wenn er aus der Arena fliegt: das Lila Skelett ein heiseres Knochenklappern, das Blaue Skelett einen eisig klirrenden Schrei, Brokk ein tiefes Grollen, Lyra und Nyx helle Rufe, Pyros ein Fauchen mit Feuerzischen.
+- **Combo-Zähler:** In jedem Match (nicht nur im Training) zeigt eine große Zahl neben dem Spieler-Panel die laufende Combo, darunter den Schaden dieser Combo und die PERFEKT-Treffer. Die Zahl springt bei jedem Treffer auf und wechselt mit der Länge die Farbe (gelb, orange, rot, ab 10 Treffern violett).
+
 ## Training
 Im Hauptmenü **Training** wählen, den eigenen Kämpfer, den der Trainingspuppe und die Arena einstellen. Im Training gibt es keine Leben und kein Zeitlimit, ein K.O. kostet nichts.
 - **Letzter Treffer:** Name des Angriffs, Schaden, Bilddaten (Start, Aktiv, Gesamt) und der **Frame-Vorteil**. Der Vorteil wird gemessen, nicht geschätzt: So viele Frames früher (+) oder später (−) als die Puppe kannst du nach dem Treffer wieder handeln. Dazu kommen die laufende und die beste Combo mit Schaden.

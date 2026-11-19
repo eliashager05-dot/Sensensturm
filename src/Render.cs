@@ -1414,6 +1414,9 @@ namespace Sensensturm
             parts.Clear(); ghosts.Clear();
             for (int i = 0; i < 2; i++) { trailA[i].Clear(); trailB[i].Clear(); OffX[i] = OffY[i] = 0; }
             Flash = 0; shake = 0; goTimer = 0; ultDim = 0;
+            cracks.Clear();
+            TimeScale = 1f; timeAcc = 0; CamLocked = false; Letterbox = 0;
+            for (int i = 0; i < 2; i++) { comboStartDmg[i] = lastVictimDmg[i] = comboDmgShown[i] = 0; lastHits[i] = lastCombo[i] = 0; comboPopFrame[i] = -999; }
         }
 
         public void OnEvent(GameEvent e, GameState s)
@@ -1484,6 +1487,7 @@ namespace Sensensturm
                         Flash = 0.35f; flashColor = c.Glow;
                         AddShake(22);
                         Audio.Play(Sfx.KO, 1.2f);
+                        Audio.Play(Audio.Scream(P.charId), 0.95f, 0.96f + (float)rng.NextDouble() * 0.08f);
                         trailA[P.slot].Clear(); trailB[P.slot].Clear();
                         break;
                     }
@@ -1496,9 +1500,15 @@ namespace Sensensturm
                     Audio.Play(Sfx.AirJump, 0.6f);
                     break;
                 case Ev.Land:
-                    Dust(e.X, e.Y, e.V > 12 ? 9 : 5, 40);
-                    Audio.Play(Sfx.Land, Math.Min(1f, e.V / 14f));
-                    break;
+                    {
+                        // harte Landung (Schnellfallen, Brokk schon früher): Staubwelle, Splitter, Bodenriss
+                        bool golem = CharDef.All[P.charId].Body == Body.Golem;
+                        float heavyAt = golem ? 13f : 17f;
+                        if (e.V >= heavyAt) HeavyImpact(e.X, e.Y, (e.V - heavyAt) / 9f + (golem ? 0.35f : 0f), c.Glow);
+                        else Dust(e.X, e.Y, e.V > 12 ? 9 : 5, 40);
+                        Audio.Play(Sfx.Land, Math.Min(1f, e.V / 14f), golem ? 0.75f : 1f);
+                        break;
+                    }
                 case Ev.Dash:
                     Dust(e.X - e.V * 10, e.Y, 6, 20);
                     Audio.Play(Sfx.Dash, 0.7f);
@@ -1534,12 +1544,15 @@ namespace Sensensturm
                     break;
                 case Ev.Shockwave:
                     parts.Add(new Particle { Kind = 8, X = e.X, Y = e.Y, Size = e.V > 1 ? 240 : 300, Life = 20, Max = 20, C = c.Glow });
+                    AddCrack(e.X, e.Y, e.V > 1 ? 0.8f : 0.6f);
                     Dust(e.X - 60, e.Y, 6, 60); Dust(e.X + 60, e.Y, 6, 60);
                     AddShake(e.V > 1 ? 9 : 6);
                     Audio.Play(Sfx.Shock, 0.8f);
                     break;
                 case Ev.Bounce:
-                    Dust(e.X, e.Y, 6, 30);
+                    // in den Boden geschmettert
+                    if (e.V >= 13) HeavyImpact(e.X, e.Y, (e.V - 13) / 10f, c.Glow);
+                    else Dust(e.X, e.Y, 6, 30);
                     Audio.Play(Sfx.Land, 0.8f, 0.8f);
                     break;
                 case Ev.Respawn:
@@ -1642,21 +1655,24 @@ namespace Sensensturm
         public void Tick()
         {
             frame++;
-            if (goTimer > 0) goTimer--;
-            if (ultDim > 0) ultDim--;
-            if (Flash > 0) Flash = Math.Max(0, Flash - 0.025f);
-            shake *= 0.85f;
+            float ts = Math.Min(1f, TimeScale);
+            int steps = SlowSteps();
+            if (goTimer > 0) goTimer = Math.Max(0, goTimer - steps);
+            if (ultDim > 0) ultDim = Math.Max(0, ultDim - steps);
+            if (Flash > 0) Flash = Math.Max(0, Flash - 0.025f * ts);
+            shake *= ts < 1 ? (float)Math.Pow(0.85, ts) : 0.85f;
             if (shake < 0.3f) shake = 0;
             shakeX = (float)(rng.NextDouble() - 0.5) * shake * 2;
             shakeY = (float)(rng.NextDouble() - 0.5) * shake * 2;
             for (int i = parts.Count - 1; i >= 0; i--)
             {
                 Particle p = parts[i];
-                p.X += p.VX; p.Y += p.VY;
-                p.VX *= p.Drag; p.VY *= p.Drag;
-                p.VY += p.Grav;
-                p.Rot += p.VR;
-                p.Life--;
+                p.X += p.VX * ts; p.Y += p.VY * ts;
+                if (ts < 1) { float dr = (float)Math.Pow(p.Drag, ts); p.VX *= dr; p.VY *= dr; }
+                else { p.VX *= p.Drag; p.VY *= p.Drag; }
+                p.VY += p.Grav * ts;
+                p.Rot += p.VR * ts;
+                p.Life -= ts;
                 if (p.Life <= 0) parts.RemoveAt(i);
             }
             for (int i = motes.Count - 1; i >= 0; i--)
@@ -1667,7 +1683,8 @@ namespace Sensensturm
                 p.Life--;
                 if (p.Life <= 0 || p.Y < -1100 || p.Y > 720) motes[i] = NewMote(false);
             }
-            for (int i = ghosts.Count - 1; i >= 0; i--) { ghosts[i].Life--; if (ghosts[i].Life <= 0) ghosts.RemoveAt(i); }
+            for (int i = ghosts.Count - 1; i >= 0; i--) { ghosts[i].Life -= steps; if (ghosts[i].Life <= 0) ghosts.RemoveAt(i); }
+            TickCracks(steps);
             for (int i = 0; i < 2; i++)
             {
                 OffX[i] *= 0.75f; OffY[i] *= 0.75f;
@@ -1754,6 +1771,7 @@ namespace Sensensturm
 
         public void UpdateCamera(GameState s, float lerp = 0.1f)
         {
+            if (CamLocked) return;
             float minX = -720, maxX = 720, minY = -470, maxY = 170;
             for (int i = 0; i < 2; i++)
             {
@@ -1800,6 +1818,7 @@ namespace Sensensturm
                     using (var b = new SolidBrush(A(m.C, 0.35f + 0.25f * (float)Math.Sin(frame * 0.05 + m.X)))) g.FillEllipse(b, m.X, m.Y, m.Size, m.Size);
 
             DrawArena(g);
+            DrawCracks(g);
             DrawDecor(g);
             // Zeitstopp der Ultimate: Welt abdunkeln, nur die Kämpfer bleiben hell
             if (ultDim > 0)
@@ -1819,8 +1838,8 @@ namespace Sensensturm
             DrawParticles(g, true);
             if (Stage != StageDef.Graveyard) DrawStageMotes(g, true);
 
-            // Namensschilder
-            for (int i = 0; i < 2; i++)
+            // Namensschilder (nicht in der Zeitlupe)
+            for (int i = 0; i < 2 && !CamLocked; i++)
             {
                 PlayerState P = s.p[i];
                 if (P.state == St.KO) continue;
@@ -1838,7 +1857,7 @@ namespace Sensensturm
             g.Restore(gs);
 
             // Indikator für Spieler außerhalb des Bildes
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 2 && !CamLocked; i++)
             {
                 PlayerState P = s.p[i];
                 if (P.state == St.KO) continue;
@@ -1895,6 +1914,7 @@ namespace Sensensturm
 
         public void DrawHud(Graphics g, GameState s, string[] names)
         {
+            TrackCombos(s);
             for (int i = 0; i < 2; i++)
             {
                 PlayerState P = s.p[i];
@@ -1954,9 +1974,8 @@ namespace Sensensturm
                     using (var b = new SolidBrush(Color.FromArgb(200, 0, 0, 0))) g.DrawString(ut, FTiny, b, ux + (uw - usz.Width) / 2 + 1, uy - 1);
                     using (var b = new SolidBrush(full ? Color.White : Color.FromArgb(225, 235, 230, 245))) g.DrawString(ut, FTiny, b, ux + (uw - usz.Width) / 2, uy - 2);
                 }
-                // Combo
-                if (P.combo >= 2 && P.comboTimer > 0)
-                    Shadowed(g, P.combo + " TREFFER COMBO" + (P.perfects > 0 ? "  (" + P.perfects + " perfekt)" : ""), FMed, Color.FromArgb(Math.Min(255, P.comboTimer * 5), 255, 220, 120), x + (i == 0 ? 0 : w), y - 60, false);
+                // Combo-Zähler mit Schaden
+                DrawComboCounter(g, P, i, x, y, w);
             }
 
             if (s.timeLeft >= 0)
