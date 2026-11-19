@@ -8,6 +8,7 @@ namespace Sensensturm
     public enum Sfx { Swing, SwingHeavy, Hit, HitHeavy, Block, Parry, Break, KO, Jump, AirJump, Land, Dash, Dodge, Clank, Menu, Select, Beep, Go, Charge, Shock, Ult, Count }
 
     // Kleiner Software-Mixer über waveOut. Alle Klänge werden beim Start synthetisiert (keine Dateien nötig).
+    // Die Hintergrundmusik (Music.cs) wird im selben Thread live dazugemischt.
     public static class Audio
     {
         const int Rate = 22050, BufSamples = 512, NumBufs = 4;
@@ -38,6 +39,7 @@ namespace Sensensturm
         public static void Init()
         {
             try { Generate(); } catch { return; }
+            Music.Init();
             try
             {
                 var fmt = new WAVEFORMATEX { wFormatTag = 1, nChannels = 1, nSamplesPerSec = Rate, wBitsPerSample = 16, nBlockAlign = 2, nAvgBytesPerSec = Rate * 2 };
@@ -123,6 +125,7 @@ namespace Sensensturm
                     if (vc.Pos >= vc.D.Length - 1) voices.RemoveAt(v);
                 }
             }
+            Music.Mix(mix);
             // weicher Limiter
             for (int k = 0; k < mix.Length; k++) mix[k] = (float)Math.Tanh(mix[k] * 0.9);
         }

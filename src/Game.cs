@@ -80,6 +80,7 @@ namespace Sensensturm
             portText = Settings.Port.ToString();
             hostChar = Settings.P1Char;
             Audio.Volume = Settings.Volume / 10f;
+            Music.Volume = Settings.MusicVolume / 10f;
         }
 
         void Toast(string msg, bool err)
@@ -204,6 +205,7 @@ namespace Sensensturm
             if (scr == Scr.Match) { if (replay != null) TickReplay(); else TickMatch(); }
             else TickMenus();
 
+            UpdateMusic();
             R.Tick();
             In.EndTick();
         }
@@ -421,6 +423,7 @@ namespace Sensensturm
                 case Scr.Settings:
                     // Reihenfolge = Anzeige: 0-4 linke Spalte (Bild & Ton), 5-10 rechte Spalte (Spiel & Steuerung), 11 Zurück
                     Add("Lautstärke", Settings.Volume + " / 10", null, d => { Settings.Volume = Math.Max(0, Math.Min(10, Settings.Volume + d)); Audio.Volume = Settings.Volume / 10f; });
+                    Add("Musik", Settings.MusicVolume + " / 10", null, d => { Settings.MusicVolume = Math.Max(0, Math.Min(10, Settings.MusicVolume + d)); Music.Volume = Settings.MusicVolume / 10f; });
                     Add("Bildschirmwackeln", OnOff(Settings.ScreenShake), null, d => Settings.ScreenShake = !Settings.ScreenShake);
                     Add("Vollbild (F11)", OnOff(Settings.Fullscreen), null, d => { Settings.Fullscreen = !Settings.Fullscreen; if (SetFullscreen != null) SetFullscreen(Settings.Fullscreen); });
                     Add("FPS / Ping anzeigen", OnOff(Settings.ShowStats), null, d => Settings.ShowStats = !Settings.ShowStats);
@@ -1114,10 +1117,10 @@ namespace Sensensturm
                 case Scr.Settings:
                     DrawTitle(g, "Einstellungen");
                     GroupPanel(g, 60, 168, 570, 352, "Bild & Ton");
-                    DrawItems(g, 80, 214, 530, 44, 8, 0, 5);
+                    DrawItems(g, 80, 212, 530, 40, 7, 0, 6);
                     GroupPanel(g, 650, 168, 570, 352, "Spiel & Steuerung");
-                    DrawItems(g, 670, 214, 530, 44, 8, 5, 6);
-                    DrawItems(g, 490, 548, 300, 46, 0, 11, 1);
+                    DrawItems(g, 670, 212, 530, 40, 7, 6, 6);
+                    DrawItems(g, 490, 548, 300, 46, 0, 12, 1);
                     break;
                 case Scr.Combos:
                     DrawCombos(g);
@@ -1317,6 +1320,28 @@ namespace Sensensturm
         {
             if (host == null || host.Spectators.Count == 0) return;
             Line(g, "Zuschauer (" + host.Spectators.Count + "/" + HostSession.MaxSpectators + "): " + host.SpectatorNames(), 350, y, Color.FromArgb(190, 225, 255), R.FTiny);
+        }
+
+        // Hintergrundmusik: Menüs = Hauptthema, Kampf = Stück der Arena (Finale schneller und mit mehr Trommeln),
+        // Sieg = Fanfare, Pause/Combo-Übersicht = gedämpft.
+        void UpdateMusic()
+        {
+            Song want = Song.Menu;
+            bool intense = false, duck = false;
+            if (scr == Scr.Match && state != null)
+            {
+                if (state.phase == GameState.Over) want = state.phaseTimer < 45 ? Song.None : Song.Victory;
+                else
+                {
+                    want = Music.ForStage(state.stage);
+                    bool lastStocks = state.stocks > 1 && state.p[0].stocks == 1 && state.p[1].stocks == 1;
+                    bool lastSeconds = state.timeLeft > 0 && state.timeLeft <= 30 * 60;
+                    intense = !training && state.phase == GameState.Fight && (lastStocks || lastSeconds);
+                    duck = paused || comboView;
+                }
+            }
+            else if (scr == Scr.Tourney && tour != null && tour.Done && frame >= tour.FillTime[tour.Rounds][0] + LineFrames) want = Song.Victory;
+            Music.Set(want, intense, duck);
         }
 
         public void DebugScreen(Scr s) { scr = s; sel = 0; }

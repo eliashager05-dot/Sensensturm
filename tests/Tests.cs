@@ -30,6 +30,7 @@ namespace Sensensturm
             fails += TestTraining();
             fails += TestRecovery();
             fails += TestStages();
+            fails += TestMusic();
             fails += Screenshots();
             Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
         }
@@ -934,6 +935,52 @@ namespace Sensensturm
             }
             Check(GameState.NewMatch(0, 1, 3, 0, 99).stage == StageDef.Graveyard, "Ungültige Arena fällt auf den Mondfriedhof zurück", ref fails);
             return fails;
+        }
+
+        static int TestMusic()
+        {
+            Console.WriteLine("Musik:");
+            int fails = 0;
+            Music.Init();
+            Check(SongDef.All.Length == (int)Song.Count, "Alle Stücke eingelesen", ref fails);
+            for (int i = 0; i < (int)Song.Count; i++)
+            {
+                SongDef d = SongDef.All[i];
+                bool even = d.LoopTicks > 0;
+                foreach (Chan c in d.Chans) if (c.Ticks == 0 || d.LoopTicks % c.Ticks != 0) { even = false; Console.WriteLine("    " + d.Name + ": Spur " + c.I + " hat " + c.Ticks + " von " + d.LoopTicks + " Ticks"); }
+                Check(even, d.Name + ": alle Spuren passen in die Schleife (" + d.LoopTicks / 16 + " Takte)", ref fails);
+                foreach (bool intense in new[] { false, true })
+                {
+                    if (intense && !d.Loop) continue;
+                    float[] b = Music.RenderOffline((Song)i, d.Loop ? 24f : 8f, intense);
+                    double sum = 0; float peak = 0; bool finite = true;
+                    foreach (float v in b) { if (float.IsNaN(v) || float.IsInfinity(v)) finite = false; sum += v * v; peak = Math.Max(peak, Math.Abs(v)); }
+                    double rms = Math.Sqrt(sum / b.Length);
+                    Check(finite && rms > 0.02 && rms < 0.3 && peak < 1.0f, string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "{0}{1}: Pegel RMS {2:0.000}, Spitze {3:0.00}", d.Name, intense ? " (Finale)" : "", rms, peak), ref fails);
+                    WriteWav(System.IO.Path.Combine(outDir, "musik_" + i + "_" + Music.Names[i].Replace("ü", "ue") + (intense ? "_finale" : "") + ".wav"), b);
+                }
+            }
+            // Siegesfanfare geht von selbst ins Hauptthema über
+            float[] v2 = Music.RenderOffline(Song.Victory, 14f, false);
+            double tail = 0;
+            for (int k = v2.Length - Music.Rate * 2; k < v2.Length; k++) tail += v2[k] * v2[k];
+            Check(Math.Sqrt(tail / (Music.Rate * 2)) > 0.01, "Nach der Siegesfanfare läuft das Hauptthema weiter", ref fails);
+            Check(Music.ForStage(StageDef.Blossom) == Song.Blossom && Music.ForStage(99) == Song.Graveyard, "Jede Arena hat ihr Stück", ref fails);
+            return fails;
+        }
+
+        static void WriteWav(string path, float[] b)
+        {
+            using (var w = new System.IO.BinaryWriter(System.IO.File.Create(path)))
+            {
+                int n = b.Length;
+                w.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); w.Write(36 + n * 2);
+                w.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); w.Write(16); w.Write((short)1); w.Write((short)1);
+                w.Write(Music.Rate); w.Write(Music.Rate * 2); w.Write((short)2); w.Write((short)16);
+                w.Write(System.Text.Encoding.ASCII.GetBytes("data")); w.Write(n * 2);
+                foreach (float v in b) w.Write((short)(Math.Max(-1f, Math.Min(1f, (float)Math.Tanh(v * 0.9 * 0.8))) * 32000));
+            }
         }
 
         static void Shot(Renderer r, GameState s, string name, string[] names)
