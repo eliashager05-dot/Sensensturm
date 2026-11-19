@@ -23,6 +23,22 @@ Unter „Lokal spielen“ bzw. in der Host-Lobby wählt man unter **Arena** eine
 | **Herbsttempel** | Sonnenuntergang, riesige Buddha-Statue, rote Ahornbäume, Tempel auf Felsinseln, Wolkenmeer, fallende Blätter |
 | **Sternenhain** | Sternennacht, leuchtender Weltenbaum, Sichelmond, Ruinentor mit Runen, Leuchtpilze, Glühwürmchen |
 
+## Musik
+Jede Arena hat ihr eigenes Stück, dazu kommen ein Hauptthema für die Menüs und eine Siegesfanfare. Wie die Soundeffekte wird alles live im Spiel synthetisiert (Step-Sequencer mit Koto, Flöte, Orgel, Glocken, Taiko, Gong und Hall in `src/Music.cs`), es gibt keine Musikdateien.
+
+| Stück | Stimmung |
+|---|---|
+| **Hauptthema** | d-Moll, heroischer Marsch mit Fanfaren-Melodie |
+| **Mondfriedhof** | schauriger Spieluhr-Walzer im Dreivierteltakt über Kirchenorgel |
+| **Kirschblütental** | japanische Tonleiter: Koto, Shakuhachi-Flöte, Taiko-Trommeln |
+| **Herbsttempel** | ruhig und warm in D-dorisch, Tempelglocken und Zupfarpeggios |
+| **Sternenhain** | schimmernde Glocken-Arpeggios in E-lydisch mit Harfenmelodie |
+
+- **Finale:** Haben beide Kämpfer nur noch ein Leben (bei mehr als einem Leben zu Beginn) oder laufen die letzten 30 Sekunden, wird die Musik schneller und es setzen zusätzliche Trommeln ein.
+- **Sieg:** Nach dem letzten K.O. spielt die Siegesfanfare, danach geht es mit dem Hauptthema weiter. Auch die Siegerehrung im Turnier bekommt die Fanfare.
+- **Pause** und Combo-Übersicht dämpfen die Musik.
+- Die Lautstärke stellt man unter *Einstellungen > Musik* ein (0 schaltet sie ab). *Lautstärke* bleibt der Gesamtregler für Musik und Effekte.
+
 ## Starten
 `Sensensturm.exe` doppelklicken. Benötigt wird nur Windows 10/11 (das .NET Framework 4.8 ist dort bereits enthalten).
 Für den zweiten PC einfach den ganzen Ordner kopieren (mindestens die `Sensensturm.exe`).
