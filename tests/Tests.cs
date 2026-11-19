@@ -33,6 +33,7 @@ namespace Sensensturm
             fails += TestMusic();
             fails += TestGameFeel();
             fails += TestOnlineTour();
+            fails += TestTimeout();
             fails += Screenshots();
             Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
         }
@@ -1174,6 +1175,60 @@ namespace Sensensturm
             foreach (Game g in cs) g.DebugLeaveOnlineTour();
             hg.Shutdown();
             Settings.Port = keepPort;
+            return f;
+        }
+
+        // Zeitablauf in allen Modi, dabei jedes Bild zeichnen: Fehler beim Zeichnen würden das Spiel einfrieren
+        static int TestTimeout()
+        {
+            Console.WriteLine("Zeitablauf (jedes Bild gezeichnet):");
+            int f = 0;
+            var bmp = new Bitmap(1280, 720);
+            string err = null;
+            Func<Game, string, bool> draw = (g, what) =>
+            {
+                try { using (var gr = Graphics.FromImage(bmp)) g.Render(gr, 1280, 720); return true; }
+                catch (Exception e) { if (err == null) err = what + ": " + e.GetType().Name + " " + e.Message + " @ " + e.StackTrace.Split('\n')[0].Trim(); return false; }
+            };
+            int keepOpp = Settings.Opponent;
+            // lokal: Unentschieden und Sieg nach Zeit, danach Ergebnisbildschirm
+            foreach (bool even in new[] { true, false })
+            {
+                err = null;
+                var g = new Game();
+                Settings.Opponent = 0;
+                g.DebugFinishLocal(3);
+                GameState s = g.DebugState;
+                s.p[1].x = 120; s.p[1].stocks = 3; s.timeLeft = 40;
+                if (!even) { s.p[1].damage = 60; s.p[0].stocks = 2; }
+                for (int i = 0; i < 260; i++) { g.Tick(); draw(g, "lokal " + (even ? "unentschieden" : "Sieg") + " Frame " + i); }
+                Check(err == null && g.DebugState.phase == GameState.Over, "Lokal " + (even ? "unentschieden" : "mit Sieger") + ": Zeit läuft ab, Ergebnis erscheint" + (err != null ? " – " + err : ""), ref f);
+            }
+            // CPU gegen CPU mit Kampfgeschehen bis zum Zeitende
+            {
+                err = null;
+                var g = new Game();
+                g.DebugCpuMatchStart(0, 2, 9, 1);
+                for (int i = 0; i < 60 * 60 * 3 + 500; i++)
+                {
+                    g.Tick();
+                    if (g.DebugState.timeLeft < 240 || g.DebugState.phase == GameState.Over || i % 300 == 0) draw(g, "CPU Frame " + i);
+                }
+                Check(err == null && g.DebugState.phase == GameState.Over, "CPU gegen CPU über volle 3 Minuten" + (err != null ? " – " + err : ""), ref f);
+            }
+            // Turnier lokal: Zeitablauf, danach zurück zum Baum
+            {
+                err = null;
+                var g = new Game();
+                g.DebugTournament(4, false, 120);
+                g.DebugStartTourMatch();
+                g.DebugState.timeLeft = 40;
+                for (int i = 0; i < 300; i++) { g.Tick(); draw(g, "Turnier Frame " + i); }
+                g.DebugTourContinue();
+                for (int i = 0; i < 60; i++) { g.Tick(); draw(g, "Turnierbaum Frame " + i); }
+                Check(err == null && g.DebugScr == Scr.Tourney, "Turnier: Zeitablauf, Ergebnis, zurück zum Baum" + (err != null ? " – " + err : ""), ref f);
+            }
+            Settings.Opponent = keepOpp;
             return f;
         }
 

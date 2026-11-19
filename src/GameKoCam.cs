@@ -175,6 +175,16 @@ namespace Sensensturm
         public bool DebugKoCamActive { get { return KoCamActive; } }
         public Renderer DebugRenderer { get { return R; } }
 
+        // CPU-Match nur starten (Tests)
+        public void DebugCpuMatchStart(int c0, int c1, int stocks, int seed)
+        {
+            mode = Mode.Local;
+            bot0 = new Bot(3, seed); bot = new Bot(3, seed + 1);
+            tourMatch = false;
+            names[0] = "Spieler 1"; names[1] = "CPU";
+            BeginMatch(GameState.NewMatch(c0, c1, stocks, 3, 1));
+        }
+
         // CPU-Match bis zum Start der Zeitlupe (für Tests und Screenshots)
         public bool DebugCpuMatchUntilKoCam(int c0, int c1, int stocks, int seed)
         {

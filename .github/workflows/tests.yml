@@ -1,0 +1,39 @@
+# Baut die Tests mit dem in Windows enthaltenen Compiler und führt sie auf einem Windows-Rechner bei GitHub aus.
+# So fallen Fehler auf, die nur unter Windows (.NET Framework / GDI+) auftreten.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Spiel und Tests bauen
+        shell: cmd
+        run: |
+          set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+          if not exist "%CSC%" set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
+          "%CSC%" /nologo /codepage:65001 /optimize+ /target:winexe /platform:anycpu /out:Sensensturm.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll src\*.cs || exit /b 1
+          "%CSC%" /nologo /codepage:65001 /optimize+ /platform:anycpu /out:Tests.exe /main:Sensensturm.Tests /r:System.Windows.Forms.dll /r:System.Drawing.dll src\*.cs tests\Tests.cs || exit /b 1
+
+      - name: Tests ausführen
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $out = & .\Tests.exe out 2>&1 | Out-String
+          Write-Output $out
+          if ($out -notmatch 'ALLE TESTS OK') { exit 1 }
+
+      - name: Screenshots hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: out/*.png
+          if-no-files-found: ignore
