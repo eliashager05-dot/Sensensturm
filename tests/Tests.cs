@@ -31,6 +31,7 @@ namespace Sensensturm
             fails += TestRecovery();
             fails += TestStages();
             fails += TestMusic();
+            fails += TestGameFeel();
             fails += Screenshots();
             Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
         }
@@ -968,6 +969,113 @@ namespace Sensensturm
             Check(Math.Sqrt(tail / (Music.Rate * 2)) > 0.01, "Nach der Siegesfanfare läuft das Hauptthema weiter", ref fails);
             Check(Music.ForStage(StageDef.Blossom) == Song.Blossom && Music.ForStage(99) == Song.Graveyard, "Jede Arena hat ihr Stück", ref fails);
             return fails;
+        }
+
+        static int TestGameFeel()
+        {
+            Console.WriteLine("Spielgefühl (Schreie, Risse, Combo-Zähler, Zeitlupe):");
+            int fails = 0;
+            // Schreie: jeder Kämpfer hat einen eigenen, hörbaren Schrei
+            Audio.Init();
+            var seen = new HashSet<Sfx>();
+            bool screamsOk = true;
+            for (int c = 0; c < CharDef.Count; c++)
+            {
+                Sfx sx = Audio.Scream(c);
+                float[] d = Audio.Clip(sx);
+                float peak = 0; bool finite = true;
+                if (d != null) foreach (float v in d) { if (float.IsNaN(v) || float.IsInfinity(v)) finite = false; peak = Math.Max(peak, Math.Abs(v)); }
+                if (d == null || d.Length < 22050 / 2 || !finite || peak < 0.2f || peak > 1.2f || !seen.Add(sx)) screamsOk = false;
+                if (d != null) WriteWav(System.IO.Path.Combine(outDir, "schrei_" + c + ".wav"), d);
+            }
+            Check(screamsOk, "K.-o.-Schrei für jeden der " + CharDef.Count + " Kämpfer (eigene Stimme, Pegel ok)", ref fails);
+
+            // Schnellfallen auf die Bühne = harte Landung mit Riss, normaler Sprung nicht
+            {
+                var r = new Renderer();
+                var s = Fresh();
+                s.p[0].x = -200; s.p[0].y = -420; s.p[0].onGround = false; s.p[0].state = St.Air; s.p[0].vy = 4;
+                var ev = new List<GameEvent>();
+                float landV = 0;
+                for (int t = 0; t < 90 && landV == 0; t++)
+                {
+                    ev.Clear();
+                    Sim.Step(s, new[] { Btn.Down, 0 }, new[] { t == 0 ? Btn.Down : 0, 0 }, ev, false);
+                    foreach (var e in ev) { r.OnEvent(e, s); if (e.Type == Ev.Land && e.Player == 0) landV = e.V; }
+                }
+                Check(landV >= 17 && r.CrackCount > 0, "Schnellfallen auf die Bühne: harte Landung (Aufprall " + landV.ToString("0.0") + ") hinterlässt einen Riss", ref fails);
+                var r2 = new Renderer();
+                r2.OnEvent(new GameEvent { Type = Ev.Land, Player = 0, X = 0, Y = 0, V = 12 }, Fresh());
+                Check(r2.CrackCount == 0, "Normale Landung: kein Riss", ref fails);
+                var r3 = new Renderer();
+                var sg = GameState.NewMatch(2, 1, 3, 0);
+                r3.OnEvent(new GameEvent { Type = Ev.Land, Player = 0, X = 0, Y = 0, V = 14 }, sg);
+                Check(r3.CrackCount == 1, "Brokk ist schwer: schon eine normale Landung mit Tempo reißt den Boden auf", ref fails);
+                var r4 = new Renderer();
+                r4.OnEvent(new GameEvent { Type = Ev.Land, Player = 0, X = 0, Y = -40, V = 22 }, Fresh());
+                Check(r4.CrackCount == 0, "Kein Riss mitten in der Luft (keine Oberfläche)", ref fails);
+                for (int i = 0; i < 1000; i++) r.Tick();
+                Check(r.CrackCount == 0, "Risse verblassen wieder", ref fails);
+            }
+
+            // Combo-Zähler: Schaden der laufenden Combo
+            {
+                var r = new Renderer();
+                var s = Fresh();
+                s.p[1].damage = 20; r.TrackCombos(s);
+                s.p[0].statHits = 1; s.p[0].combo = 1; s.p[0].comboTimer = 100; s.p[1].damage = 27; r.TrackCombos(s);
+                bool a = Math.Abs(r.ComboDamage(0) - 7) < 0.01f;
+                s.p[0].statHits = 2; s.p[0].combo = 2; s.p[1].damage = 35; r.TrackCombos(s);
+                bool b = Math.Abs(r.ComboDamage(0) - 15) < 0.01f;
+                s.p[0].statHits = 3; s.p[0].combo = 1; s.p[1].damage = 41; r.TrackCombos(s);
+                bool c = Math.Abs(r.ComboDamage(0) - 6) < 0.01f;
+                Check(a && b && c, "Combo-Zähler: Schaden zählt ab Combo-Beginn (7 → 15 %, neue Combo 6 %)", ref fails);
+            }
+
+            // Zeitlupe beim letzten K.O.: läuft, danach kommt der Siegerbildschirm
+            {
+                var game = new Game();
+                bool started = game.DebugCpuMatchUntilKoCam(2, 3, 2, 11);
+                Check(started, "Letzter K.O. startet die Zeitlupe", ref fails);
+                if (started)
+                {
+                    game.DebugFrames(40);
+                    Check(game.DebugKoCamActive && game.DebugRenderer.TimeScale < 1 && game.DebugRenderer.Letterbox > 0.5f, "Zeitlupe: Effekte verlangsamt, Kinobalken", ref fails);
+                    ShotGame(game, "shot_kocam_slow");
+                    int n = 0;
+                    while (game.DebugKoCamActive && n < 600) { game.DebugFrames(1); n++; }
+                    Check(!game.DebugKoCamActive && n < 400, "Zeitlupe endet nach " + (n + 40) + " Frames", ref fails);
+                    game.DebugFrames(150);
+                    Check(game.DebugState.phase == GameState.Over && Audio.PitchScale == 1f && game.DebugRenderer.TimeScale == 1f, "Danach Siegerbildschirm, Klang und Tempo wieder normal", ref fails);
+                }
+                var g2 = new Game();
+                g2.DebugCpuMatchUntilKoCam(0, 4, 2, 5);
+                g2.DebugFrames(70);
+                ShotGame(g2, "shot_kocam_flight");
+            }
+            // Combo-Zähler im Bild (P1 mitten in einer 7er-Combo, P2 mit 3 Treffern)
+            {
+                var r = new Renderer();
+                var s = Fresh();
+                s.p[0].x = -80; s.p[1].x = 60; s.p[1].y = -140; s.p[1].onGround = false;
+                s.p[1].damage = 30; s.p[0].damage = 50; r.TrackCombos(s);
+                s.p[0].statHits = 1; s.p[0].combo = 1; s.p[0].comboTimer = 100; s.p[1].damage = 36; r.TrackCombos(s);
+                s.p[0].statHits = 7; s.p[0].combo = 7; s.p[0].perfects = 2; s.p[1].damage = 78; r.TrackCombos(s);
+                s.p[1].statHits = 1; s.p[1].combo = 1; s.p[1].comboTimer = 100; s.p[0].damage = 58; r.TrackCombos(s);
+                s.p[1].statHits = 3; s.p[1].combo = 3; s.p[0].damage = 71; r.TrackCombos(s);
+                for (int i = 0; i < 6; i++) { r.Tick(); r.UpdateCamera(s); }
+                r.SnapCamera(s);
+                r.OnEvent(new GameEvent { Type = Ev.Land, Player = 0, X = -300, Y = 0, V = 23 }, s);
+                for (int i = 0; i < 10; i++) r.Tick();
+                Shot(r, s, "shot_combo_counter", new[] { "Spieler 1", "Spieler 2" });
+            }
+            return fails;
+        }
+
+        static void ShotGame(Game game, string name)
+        {
+            using (var bmp = new Bitmap(1280, 720))
+            using (var g = Graphics.FromImage(bmp)) { game.Render(g, 1280, 720); bmp.Save(System.IO.Path.Combine(outDir, name + ".png"), ImageFormat.Png); }
         }
 
         static void WriteWav(string path, float[] b)

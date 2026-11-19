@@ -64,8 +64,8 @@ namespace Sensensturm
         // Alle Spielereignisse laufen hierüber: Effekte/Klang und Statistik
         void OnEvent(GameEvent e)
         {
-            R.OnEvent(e, state);
             stats.OnEvent(e, state);
+            if (!KoCamEvent(e)) R.OnEvent(e, state);
         }
 
         static readonly string[][] Quotes =

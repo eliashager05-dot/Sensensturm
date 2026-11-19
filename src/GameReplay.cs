@@ -68,6 +68,7 @@ namespace Sensensturm
             names[0] = rp.Name0; names[1] = rp.Name1;
             comboView = false;
             R.ClearFx();
+            ResetKoCam();
             R.SnapCamera(state);
             scr = Scr.Match;
             In.Menu.Clear();
@@ -82,6 +83,7 @@ namespace Sensensturm
             stats = replayBackupStats ?? new MatchStats();
             names[0] = replayBackupNames[0]; names[1] = replayBackupNames[1];
             R.ClearFx();
+            ResetKoCam();
             if (state != null) R.SnapCamera(state);
             In.Menu.Clear();
             Action d = replayDone;
