@@ -1,0 +1,45 @@
+# Baut Sensensturm.exe auf einem Windows-Rechner bei GitHub und veröffentlicht sie als Release.
+# Auslöser: ein Versions-Tag wie v1.0 (git tag v1.0 && git push origin v1.0)
+# oder von Hand unter Actions > Release > Run workflow (mit Versionsnummer).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versionsnummer, z. B. v1.1'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sensensturm.exe bauen (wie build.bat)
+        shell: cmd
+        run: |
+          set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+          if not exist "%CSC%" set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
+          "%CSC%" /nologo /codepage:65001 /optimize+ /target:winexe /platform:anycpu /out:Sensensturm.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll src\*.cs
+
+      - name: Zip packen
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.version }}' } else { '${{ github.ref_name }}' }
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force -Path pkg/Sensensturm | Out-Null
+          Copy-Item Sensensturm.exe, README.md pkg/Sensensturm/
+          Compress-Archive -Path pkg/Sensensturm -DestinationPath "Sensensturm-$tag.zip" -Force
+
+      - name: Release veröffentlichen
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:TAG "Sensensturm-$env:TAG.zip" Sensensturm.exe --title "Sensensturm $env:TAG" --notes-file .github/RELEASE_NOTES.md --target $env:GITHUB_SHA
