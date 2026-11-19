@@ -110,6 +110,7 @@ namespace Sensensturm
 
         void StartTourMatch()
         {
+            if (tourOnline) { StartOnlineTourMatch(); return; }
             int r, m;
             if (tour == null || !tour.NextMatch(out r, out m)) return;
             int ia = tour.Slot[r][2 * m], ib = tour.Slot[r][2 * m + 1];
@@ -139,6 +140,7 @@ namespace Sensensturm
             if (lastReplay != null) tour.Replays[Tournament.Key(r, m)] = lastReplay;
             LeaveTourMatch();
             tour.Advance(r, m, winner, frame + 20);
+            if (tourOnline) PushTourInfo(true);
         }
 
         void LeaveTourMatch()
@@ -147,6 +149,14 @@ namespace Sensensturm
             bot0 = null;
             state = null;
             paused = false;
+            if (tourOnline && host != null)
+            {
+                bot = null;
+                host.InMatch = false;
+                host.SlotPeer[0] = host.SlotPeer[1] = null;
+                otPhase = 1;
+                PushTourInfo(true);
+            }
             Go(Scr.Tourney);
         }
 
@@ -167,6 +177,8 @@ namespace Sensensturm
 
         void BuildTourneyItems()
         {
+            if (tourClient) { Add("Turnier verlassen", null, LeaveOnlineTour, null); return; }
+            if (tourOnline) { BuildOnlineTourneyItems(); return; }
             if (tour == null) { Add("Zurück", null, () => Go(Scr.Main), null); return; }
             if (tour.Done)
             {
@@ -220,6 +232,7 @@ namespace Sensensturm
                 TickConfetti();
                 return;
             }
+            if (tourClient) return; // Clients rechnen nichts aus, der Host schickt den Stand
             int nr, nm;
             if (!tour.AutoCpu || !tour.NextMatch(out nr, out nm) || !CpuOnly(nr, nm)) { tourAutoAt = -1; return; }
             if (tourAutoAt < 0) tourAutoAt = Math.Max(frame, TourAnimEnd()) + 45;
@@ -582,6 +595,7 @@ namespace Sensensturm
             }
 
             if (has) DrawNextMatchCard(g, nr, nm, now);
+            if (tourOnline || tourClient) DrawOnlineTourStatus(g);
             DrawTourItems(g);
         }
 

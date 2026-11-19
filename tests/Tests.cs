@@ -32,6 +32,7 @@ namespace Sensensturm
             fails += TestStages();
             fails += TestMusic();
             fails += TestGameFeel();
+            fails += TestOnlineTour();
             fails += Screenshots();
             Console.WriteLine(fails == 0 ? "ALLE TESTS OK" : fails + " TEST(S) FEHLGESCHLAGEN");
         }
@@ -1070,6 +1071,110 @@ namespace Sensensturm
                 Shot(r, s, "shot_combo_counter", new[] { "Spieler 1", "Spieler 2" });
             }
             return fails;
+        }
+
+        static int TestOnlineTour()
+        {
+            Console.WriteLine("Online-Turnier (Loopback: Host + 3 Clients auf eigenen PCs):");
+            int f = 0;
+            int keepPort = Settings.Port;
+            const int port = 47311;
+            var hg = new Game();
+            hg.DebugStartTourHostLan(port);
+            Check(hg.DebugHost != null && hg.DebugHost.Tourney && hg.DebugScr == Scr.TourLobby, "Host öffnet LAN-Turnier-Lobby", ref f);
+            var cs = new List<Game>();
+            for (int i = 0; i < 3; i++) { var g = new Game(); g.DebugJoinLan("127.0.0.1", port); cs.Add(g); }
+            Action<int> run = n =>
+            {
+                for (int i = 0; i < n; i++) { hg.Tick(); foreach (Game g in cs) g.Tick(); Thread.Sleep(1); }
+            };
+            for (int i = 0; i < 1500 && !cs.TrueForAll(g => g.DebugTourClient && g.DebugScr == Scr.TourLobby); i += 10) run(10);
+            Check(hg.DebugHost.Members.Count == 3 && cs.TrueForAll(g => g.DebugTourClient && g.DebugScr == Scr.TourLobby),
+                "3 Clients treten bei und landen in der Turnier-Lobby (" + hg.DebugHost.Members.Count + " Teilnehmer + Host)", ref f);
+            run(30);
+            ShotGame(hg, "shot_otour_lobby_host");
+            ShotGame(cs[0], "shot_otour_lobby_client");
+
+            hg.DebugSetCpuFill(0, 2);
+            hg.DebugStartOnlineTournament();
+            run(60);
+            Tournament ht = hg.DebugTour;
+            Func<Game, bool> sameTree = g =>
+            {
+                Tournament t = g.DebugTour;
+                if (t == null || ht == null || t.E.Count != ht.E.Count) return false;
+                for (int r = 0; r <= ht.Rounds; r++) for (int i = 0; i < ht.Slot[r].Length; i++) if (t.Slot[r][i] != ht.Slot[r][i]) return false;
+                return true;
+            };
+            Check(ht != null && ht.E.Count == 4 && cs.TrueForAll(g => g.DebugScr == Scr.Tourney && g.DebugOtPhase == 1 && sameTree(g)),
+                "Turnier gestartet: alle sehen denselben Baum (4 Teilnehmer)", ref f);
+            ShotGame(cs[1], "shot_otour_bracket_client");
+
+            int played = 0, remoteVsRemote = 0, wrongSlot = 0, notInMatch = 0, notBack = 0, moved = 0;
+            for (int guard = 0; guard < 6 && ht != null && !ht.Done; guard++)
+            {
+                int r, m;
+                if (!ht.NextMatch(out r, out m)) break;
+                Entrant e0 = ht.E[ht.Slot[r][2 * m]], e1 = ht.E[ht.Slot[r][2 * m + 1]];
+                hg.DebugStartTourMatch();
+                run(30);
+                foreach (Game g in cs)
+                {
+                    ClientSession c = g.DebugClient;
+                    int want = e0.Owner == c.MyId ? 0 : e1.Owner == c.MyId ? 1 : -1;
+                    if (c.MySlot != want) wrongSlot++;
+                    if (g.DebugScr != Scr.Match) notInMatch++;
+                }
+                bool rr = e0.Owner > 0 && e1.Owner > 0;
+                Game mover = null;
+                if (rr)
+                {
+                    remoteVsRemote++;
+                    mover = cs.Find(g => g.DebugClient.MyId == e0.Owner);
+                    mover.In.KeyDown(System.Windows.Forms.Keys.D); // Spieler 1 an seinem PC läuft nach rechts
+                }
+                float x0 = hg.DebugState.p[0].x;
+                run(170 + 70);
+                if (mover != null)
+                {
+                    mover.In.KeyUp(System.Windows.Forms.Keys.D);
+                    if (hg.DebugState.p[0].x - x0 > 120) moved++;
+                    ShotGame(cs.Find(g => g != mover && g.DebugClient.MySlot < 0) ?? mover, "shot_otour_spectate");
+                }
+                GameState hs = hg.DebugState;
+                hs.p[1].stocks = 1; hs.p[1].x = 5000;
+                for (int i = 0; i < 700 && !(hg.DebugState.phase == GameState.Over && hg.DebugState.phaseTimer > 100 && !hg.DebugKoCamActive); i += 10) run(10);
+                hg.DebugTourContinue();
+                run(40);
+                foreach (Game g in cs) if (g.DebugScr != Scr.Tourney || !sameTree(g)) notBack++;
+                played++;
+            }
+            Check(ht != null && ht.Done && played == 3, "3 Matches gespielt, Turnier entschieden (Sieger: " + (ht != null && ht.Done ? ht.E[ht.Champion].Name : "-") + ")", ref f);
+            Check(wrongSlot == 0 && notInMatch == 0, "Jeder Client steuert den richtigen Spielerplatz oder schaut zu (Fehler: " + wrongSlot + "/" + notInMatch + ")", ref f);
+            Check(remoteVsRemote >= 1 && moved == remoteVsRemote, "Match zweier Clients: Host rechnet mit den Eingaben beider PCs (" + moved + "/" + remoteVsRemote + ")", ref f);
+            Check(notBack == 0, "Nach jedem Match sind alle wieder am Turnierbaum, Baum überall gleich", ref f);
+            ShotGame(cs[2], "shot_otour_champion_client");
+
+            // zweites Turnier mit CPU: ein Client geht, eine CPU übernimmt seinen Platz
+            Game quitter = cs[2];
+            byte quitId = quitter.DebugClient.MyId;
+            hg.DebugBackToLobby();
+            run(40);
+            Check(cs.TrueForAll(g => g.DebugScr == Scr.TourLobby), "\"Neues Turnier\": alle zurück in der Lobby", ref f);
+            hg.DebugSetCpuFill(1, 1);
+            hg.DebugStartOnlineTournament();
+            run(40);
+            quitter.DebugLeaveOnlineTour();
+            cs.Remove(quitter);
+            run(40);
+            Entrant q = hg.DebugTour.E.Find(e => e.Name.EndsWith("(CPU)"));
+            Check(hg.DebugHost.Members.Count == 2 && q != null && !q.Human && q.Owner == Game.OwnerCpu, "Client verlässt das Turnier: CPU übernimmt seinen Platz (" + (q != null ? q.Name : "-") + ")", ref f);
+            Check(cs.TrueForAll(g => g.DebugTour != null && g.DebugTour.E.Exists(e => e.Name.EndsWith("(CPU)"))), "Die anderen sehen den Wechsel im Baum", ref f);
+
+            foreach (Game g in cs) g.DebugLeaveOnlineTour();
+            hg.Shutdown();
+            Settings.Port = keepPort;
+            return f;
         }
 
         static void ShotGame(Game game, string name)

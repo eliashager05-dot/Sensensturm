@@ -8,6 +8,8 @@ namespace Sensensturm
     {
         public string Name;
         public int Char, Cpu;
+        // Online-Turnier: an welchem PC der Teilnehmer spielt (0 = Host, sonst Kennung des Clients, 255 = CPU)
+        public int Owner;
         public bool Human { get { return Cpu == 0; } }
     }
 
@@ -48,6 +50,28 @@ namespace Sensensturm
         {
             int n = E.Count;
             if (n < 2) throw new InvalidOperationException("Mindestens 2 Teilnehmer");
+            Layout(now);
+            var order = new List<int>();
+            for (int i = 0; i < n; i++) order.Add(i);
+            for (int i = order.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); int t = order[i]; order[i] = order[j]; order[j] = t; }
+            // jede Paarung bekommt mindestens einen echten Teilnehmer, Freilose verteilen sich gleichmäßig
+            int half = Size / 2;
+            for (int m = 0; m < half; m++)
+            {
+                Slot[0][2 * m] = order[m];
+                Slot[0][2 * m + 1] = m + half < n ? order[m + half] : Bye;
+            }
+            for (int m = 0; m < half; m++)
+            {
+                int a = Slot[0][2 * m], b = Slot[0][2 * m + 1];
+                if (b == Bye) Advance(0, m, a, now + Size * 3 + 20 + m * 6);
+            }
+        }
+
+        // leerer Baum passender Größe (Online-Clients füllen ihn mit dem Stand vom Host)
+        public void Layout(int now)
+        {
+            int n = E.Count;
             Size = 2; Rounds = 1;
             while (Size < n) { Size *= 2; Rounds++; }
             Slot = new int[Rounds + 1][];
@@ -60,23 +84,7 @@ namespace Sensensturm
             }
             OutTime = new int[n];
             for (int i = 0; i < n; i++) OutTime[i] = -1;
-
-            var order = new List<int>();
-            for (int i = 0; i < n; i++) order.Add(i);
-            for (int i = order.Count - 1; i > 0; i--) { int j = rng.Next(i + 1); int t = order[i]; order[i] = order[j]; order[j] = t; }
-            // jede Paarung bekommt mindestens einen echten Teilnehmer, Freilose verteilen sich gleichmäßig
-            int half = Size / 2;
-            for (int m = 0; m < half; m++)
-            {
-                Slot[0][2 * m] = order[m];
-                Slot[0][2 * m + 1] = m + half < n ? order[m + half] : Bye;
-            }
             for (int i = 0; i < Size; i++) FillTime[0][i] = now + i * 3; // Einflug nacheinander
-            for (int m = 0; m < half; m++)
-            {
-                int a = Slot[0][2 * m], b = Slot[0][2 * m + 1];
-                if (b == Bye) Advance(0, m, a, now + Size * 3 + 20 + m * 6);
-            }
         }
 
         public bool Done { get { return Slot != null && Slot[Rounds][0] >= 0; } }

@@ -15,11 +15,14 @@ namespace Sensensturm
     // (Client-Side Prediction) und gleicht sie mit jedem Snapshot ab (Reconciliation).
     public static class Pk
     {
-        public const byte Version = 9;
+        public const byte Version = 10;
         public const byte Discover = 1, DiscoverReply = 2, Join = 3, Welcome = 4, Reject = 5, Lobby = 6, Input = 7,
-            Snapshot = 8, Ping = 9, Pong = 10, Bye = 11, Hello = 12, Punch = 13, Rematch = 14, ReplayReq = 15, ReplayChunk = 16;
-        // Rolle eines Teilnehmers (Welcome/Lobby)
-        public const byte RolePlayer = 0, RoleSpectator = 1;
+            Snapshot = 8, Ping = 9, Pong = 10, Bye = 11, Hello = 12, Punch = 13, Rematch = 14, ReplayReq = 15, ReplayChunk = 16,
+            TourInfo = 17;
+        // Rolle eines Teilnehmers (Welcome/Lobby). RoleTour: Teilnehmer einer Turnier-Lobby (spielt oder schaut je nach Paarung)
+        public const byte RolePlayer = 0, RoleSpectator = 1, RoleTour = 2;
+        // Kennung "niemand" in den Spielerplätzen eines Snapshots (CPU oder niemand an einem anderen PC)
+        public const byte NoPeer = 255;
         // Wiederholungen werden nach dem Match in Stücken dieser Größe übertragen
         public const int ReplayChunkSize = 1024;
 
@@ -296,11 +299,27 @@ namespace Sensensturm
         public IPEndPoint Ep;
         public string Name = "";
         public double LastRecv;
+        // Kennung im Raum (0 = Host) und für Turnier-Teilnehmer: gewählter Kämpfer und eigene Eingabe-Warteschlange
+        public byte Id;
+        public int Char;
+        public readonly Queue<NetInput> Inputs = new Queue<NetInput>();
+        public int LastQueued, LastAck, LastHeld;
+        public void ResetInputs() { Inputs.Clear(); LastAck = LastQueued; LastHeld = 0; }
     }
 
     public class HostSession
     {
         public const int MaxSpectators = 4;
+        // Turnier-Lobby: alle Beigetretenen sind Teilnehmer (bis zu 15 neben dem Host). Wer gerade spielt, steht in SlotPeer.
+        public const int MaxMembers = 15;
+        public bool Tourney;
+        public readonly List<Peer> Members = new List<Peer>();
+        public readonly Peer[] SlotPeer = new Peer[2];
+        public readonly List<byte> MembersLeft = new List<byte>(); // Kennungen getrennter Teilnehmer (liest das Spiel)
+        public byte ClientId = Pk.NoPeer;
+        byte nextId = 1;
+        byte[] tourInfo;
+        double lastTourInfo;
         public readonly NetSocket Sock = new NetSocket();
         public IPEndPoint Client;
         public string ClientName = "";
@@ -327,11 +346,48 @@ namespace Sensensturm
 
         public bool HasClient { get { return Client != null; } }
         public bool OverRelay { get { return NetSocket.IsRelay(Client); } }
-        public bool Full { get { return HasClient && Spectators.Count >= MaxSpectators; } }
+        public bool Full { get { return Tourney ? Members.Count >= MaxMembers : HasClient && Spectators.Count >= MaxSpectators; } }
 
         public string Start(int port) { return Sock.Open(port); }
 
         Peer FindSpectator(IPEndPoint ep) { return Spectators.Find(p => p.Ep.Equals(ep)); }
+        Peer FindMember(IPEndPoint ep) { return Members.Find(p => p.Ep.Equals(ep)); }
+        public Peer MemberById(int id) { return Members.Find(p => p.Id == id); }
+
+        byte NewId()
+        {
+            for (int guard = 0; guard < 300; guard++)
+            {
+                byte id = nextId;
+                nextId = (byte)(nextId >= 250 ? 1 : nextId + 1);
+                if (id != ClientId && MemberById(id) == null && Spectators.Find(p => p.Id == id) == null) return id;
+            }
+            return 1;
+        }
+
+        // Turnierstand (vom Spiel gepackt) an alle Teilnehmer: sofort und danach regelmäßig wiederholt
+        public void SetTourInfo(byte[] data, double now, bool immediate)
+        {
+            tourInfo = data;
+            if (immediate) lastTourInfo = now - 10;
+        }
+
+        void SendTourInfo()
+        {
+            if (tourInfo == null || Members.Count == 0) return;
+            var w = Pk.Begin(Pk.TourInfo);
+            w.Write(tourInfo);
+            byte[] b = Pk.End(w);
+            foreach (Peer p in Members) Sock.Send(p.Ep, b);
+        }
+
+        void DropMember(Peer p, string why)
+        {
+            Members.Remove(p);
+            MembersLeft.Add(p.Id);
+            Messages.Add(p.Name + why);
+            for (int k = 0; k < 2; k++) if (SlotPeer[k] == p) SlotPeer[k] = null;
+        }
 
         public void Poll(double now)
         {
@@ -354,6 +410,13 @@ namespace Sensensturm
                     Messages.Add(Spectators[i].Name + " schaut nicht mehr zu (Verbindung verloren).");
                     Spectators.RemoveAt(i);
                 }
+            for (int i = Members.Count - 1; i >= 0; i--)
+                if (now - Members[i].LastRecv > 5.0) DropMember(Members[i], " hat das Turnier verlassen (Verbindung verloren).");
+            if (Tourney && now - lastTourInfo > (InMatch ? 1.0 : 0.25))
+            {
+                lastTourInfo = now;
+                SendTourInfo();
+            }
             if (HasClient && now - lastPing > 0.5)
             {
                 lastPing = now;
@@ -370,13 +433,16 @@ namespace Sensensturm
         {
             bool fromClient = HasClient && from.Equals(Client);
             Peer spec = fromClient ? null : FindSpectator(from);
+            Peer member = fromClient || spec != null ? null : FindMember(from);
+            if (member != null) { member.LastRecv = now; HandleMember(type, ver, r, member, now); return; }
             switch (type)
             {
                 case Pk.Discover:
                     {
                         var w = Pk.Begin(Pk.DiscoverReply);
                         w.Write(Settings.PlayerName);
-                        w.Write(Full ? (byte)2 : HasClient ? (byte)1 : (byte)0); // 1 = Spieler da, Zuschauen möglich
+                        // 0 frei, 1 Spieler da (Zuschauen möglich), 2 voll, 3 Turnier-Lobby
+                        w.Write(Full ? (byte)2 : Tourney ? (byte)3 : HasClient ? (byte)1 : (byte)0);
                         Sock.Send(from, Pk.End(w));
                         break;
                     }
@@ -385,30 +451,38 @@ namespace Sensensturm
                         string name = r.ReadString();
                         if (ver != Pk.Version) { SendReject(from, 2); return; }
                         if (string.IsNullOrEmpty(name)) name = "Spieler 2";
+                        if (Tourney)
+                        {
+                            if (Members.Count >= MaxMembers) { SendReject(from, 3); return; }
+                            var m = new Peer { Ep = from, Name = name, LastRecv = now, Id = NewId(), Char = 0 };
+                            Members.Add(m);
+                            Messages.Add(name + " ist dem Turnier beigetreten.");
+                            SendWelcome(from, Pk.RoleTour, m.Id);
+                            lastTourInfo = now - 10;
+                            return;
+                        }
                         // Der erste wird Spieler 2, alle weiteren schauen zu
                         byte role = Pk.RolePlayer;
+                        byte id = ClientId;
                         if (fromClient) lastRecv = now;
-                        else if (spec != null) { spec.LastRecv = now; role = Pk.RoleSpectator; }
+                        else if (spec != null) { spec.LastRecv = now; role = Pk.RoleSpectator; id = spec.Id; }
                         else if (!HasClient)
                         {
-                            SetClient(from, name);
+                            SetClient(from, name, NewId());
+                            id = ClientId;
                             lastRecv = now;
                             Messages.Add(ClientName + " ist der Lobby beigetreten.");
                         }
                         else if (Spectators.Count < MaxSpectators)
                         {
-                            Spectators.Add(new Peer { Ep = from, Name = name, LastRecv = now });
+                            var sp = new Peer { Ep = from, Name = name, LastRecv = now, Id = NewId() };
+                            Spectators.Add(sp);
                             Messages.Add(name + " schaut zu.");
                             role = Pk.RoleSpectator;
+                            id = sp.Id;
                         }
                         else { SendReject(from, 1); return; }
-                        var wl = Pk.Begin(Pk.Welcome);
-                        wl.Write(Settings.PlayerName);
-                        byte[] t = Tuning.ToBytes();
-                        wl.Write((ushort)t.Length);
-                        wl.Write(t);
-                        wl.Write(role);
-                        Sock.Send(from, Pk.End(wl));
+                        SendWelcome(from, role, id);
                         SendLobby();
                         break;
                     }
@@ -473,24 +547,74 @@ namespace Sensensturm
                     }
                 case Pk.ReplayReq:
                     if (!fromClient && spec == null) return;
-                    {
-                        int mid = r.ReadInt32(), off = r.ReadInt32(), n = Math.Min(8, (int)r.ReadByte());
-                        if (replayData == null || mid != replayMatch || off < 0) return;
-                        for (int i = 0; i < n && off < replayData.Length; i++, off += Pk.ReplayChunkSize)
-                        {
-                            int len = Math.Min(Pk.ReplayChunkSize, replayData.Length - off);
-                            var w = Pk.Begin(Pk.ReplayChunk);
-                            w.Write(mid); w.Write(replayData.Length); w.Write(off); w.Write((ushort)len); w.Write(replayData, off, len);
-                            Sock.Send(from, Pk.End(w));
-                        }
-                        break;
-                    }
+                    SendReplayChunks(from, r);
+                    break;
             }
         }
 
-        void SetClient(IPEndPoint ep, string name)
+        void SendWelcome(IPEndPoint to, byte role, byte id)
+        {
+            var wl = Pk.Begin(Pk.Welcome);
+            wl.Write(Settings.PlayerName);
+            byte[] t = Tuning.ToBytes();
+            wl.Write((ushort)t.Length);
+            wl.Write(t);
+            wl.Write(role);
+            wl.Write(id);
+            Sock.Send(to, Pk.End(wl));
+        }
+
+        // Pakete eines Turnier-Teilnehmers
+        void HandleMember(byte type, byte ver, BinaryReader r, Peer m, double now)
+        {
+            switch (type)
+            {
+                case Pk.Join:
+                    SendWelcome(m.Ep, Pk.RoleTour, m.Id);
+                    break;
+                case Pk.Hello:
+                    m.Name = r.ReadString();
+                    if (r.BaseStream.Position < r.BaseStream.Length) { int want = r.ReadByte(); if (want < CharDef.Count) m.Char = want; }
+                    break;
+                case Pk.Input:
+                    {
+                        int newest = r.ReadInt32();
+                        int n = r.ReadByte();
+                        var tmp = new NetInput[n];
+                        for (int i = 0; i < n; i++) tmp[i] = new NetInput { Seq = newest - i, Held = r.ReadUInt16(), Pressed = r.ReadUInt16() };
+                        for (int i = n - 1; i >= 0; i--)
+                            if (tmp[i].Seq > m.LastQueued) { m.Inputs.Enqueue(tmp[i]); m.LastQueued = tmp[i].Seq; }
+                        while (m.Inputs.Count > 30) m.Inputs.Dequeue(); // spielt gerade nicht: nicht endlos sammeln
+                        break;
+                    }
+                case Pk.Ping:
+                    { var w = Pk.Begin(Pk.Pong); w.Write(r.ReadDouble()); Sock.Send(m.Ep, Pk.End(w)); break; }
+                case Pk.Bye:
+                    DropMember(m, " hat das Turnier verlassen.");
+                    break;
+                case Pk.ReplayReq:
+                    SendReplayChunks(m.Ep, r);
+                    break;
+            }
+        }
+
+        void SendReplayChunks(IPEndPoint to, BinaryReader r)
+        {
+            int mid = r.ReadInt32(), off = r.ReadInt32(), n = Math.Min(8, (int)r.ReadByte());
+            if (replayData == null || mid != replayMatch || off < 0) return;
+            for (int i = 0; i < n && off < replayData.Length; i++, off += Pk.ReplayChunkSize)
+            {
+                int len = Math.Min(Pk.ReplayChunkSize, replayData.Length - off);
+                var w = Pk.Begin(Pk.ReplayChunk);
+                w.Write(mid); w.Write(replayData.Length); w.Write(off); w.Write((ushort)len); w.Write(replayData, off, len);
+                Sock.Send(to, Pk.End(w));
+            }
+        }
+
+        void SetClient(IPEndPoint ep, string name, byte id)
         {
             Client = ep;
+            ClientId = id;
             ClientName = name;
             ClientJustJoined = true;
             ClientChar = CharDef.Next(HostChar, 1, HostChar);
@@ -529,6 +653,7 @@ namespace Sensensturm
         void DropClient()
         {
             Client = null;
+            ClientId = Pk.NoPeer;
             Ping = -1;
             queue.Clear();
             if (InMatch) PlayerLeft = true;
@@ -537,7 +662,7 @@ namespace Sensensturm
             {
                 Peer p = Spectators[0];
                 Spectators.RemoveAt(0);
-                SetClient(p.Ep, p.Name);
+                SetClient(p.Ep, p.Name, p.Id);
                 lastRecv = p.LastRecv;
                 Messages.Add(p.Name + " rückt als Spieler 2 nach.");
             }
@@ -563,6 +688,7 @@ namespace Sensensturm
             Results = HostVote = ClientVote = false;
             PlayerLeft = false;
             replayData = null;
+            foreach (Peer m in Members) m.ResetInputs();
         }
 
         // Wiederholung des gerade beendeten Matches für Client und Zuschauer bereitstellen
@@ -585,15 +711,38 @@ namespace Sensensturm
             lastAck = i.Seq;
         }
 
+        // Eingabe eines Turnier-Teilnehmers (wie TakeInput, aber aus seiner eigenen Warteschlange)
+        public void TakeInput(Peer p, out int held, out int pressed)
+        {
+            pressed = 0;
+            if (p.Inputs.Count == 0) { held = p.LastHeld; return; }
+            NetInput i = p.Inputs.Dequeue();
+            pressed |= i.Pressed;
+            while (p.Inputs.Count > 3) { i = p.Inputs.Dequeue(); pressed |= i.Pressed; }
+            held = i.Held;
+            p.LastHeld = held;
+            p.LastAck = i.Seq;
+        }
+
         public void SendSnapshot(GameState s, List<GameEvent> newEvents)
         {
             foreach (var e in newEvents) { e.Id = nextEventId++; history.Add(e); historyTick.Add(s.tick); }
             while (historyTick.Count > 0 && historyTick[0] < s.tick - 40) { history.RemoveAt(0); historyTick.RemoveAt(0); }
-            if (!HasClient && Spectators.Count == 0) return;
+            if (!HasClient && Spectators.Count == 0 && Members.Count == 0) return;
             var w = Pk.Begin(Pk.Snapshot);
             w.Write(s.tick);
             w.Write(MatchId);
-            w.Write(lastAck);
+            // wer welchen Spielerplatz steuert (Kennung) und bis zu welcher Eingabe der Host schon gerechnet hat
+            if (Tourney)
+            {
+                for (int k = 0; k < 2; k++) w.Write(SlotPeer[k] != null ? SlotPeer[k].Id : Pk.NoPeer);
+                for (int k = 0; k < 2; k++) w.Write(SlotPeer[k] != null ? SlotPeer[k].LastAck : 0);
+            }
+            else
+            {
+                w.Write((byte)0); w.Write(HasClient ? ClientId : Pk.NoPeer);
+                w.Write(0); w.Write(lastAck);
+            }
             s.Write(w);
             int n = Math.Min(60, history.Count);
             w.Write((byte)n);
@@ -613,6 +762,13 @@ namespace Sensensturm
             if (HasClient && !(odd && OverRelay)) Sock.Send(Client, b);
             foreach (Peer p in Spectators)
                 if (!(odd && NetSocket.IsRelay(p.Ep))) Sock.Send(p.Ep, b);
+            // Turnier: Spieler jeden Tick, Zuschauer über das Relay nur jeden dritten (entlastet den Vermittlungsserver)
+            foreach (Peer p in Members)
+            {
+                bool playing = p == SlotPeer[0] || p == SlotPeer[1];
+                bool relay = NetSocket.IsRelay(p.Ep);
+                if (playing ? !(odd && relay) : !(relay && s.tick % 3 != 0) && !(!relay && odd)) Sock.Send(p.Ep, b);
+            }
         }
 
         public void Close()
@@ -622,16 +778,18 @@ namespace Sensensturm
             {
                 if (HasClient) Sock.Send(Client, b);
                 foreach (Peer p in Spectators) Sock.Send(p.Ep, b);
+                foreach (Peer p in Members) Sock.Send(p.Ep, b);
             }
             Sock.Close();
             Client = null;
             Spectators.Clear();
+            Members.Clear();
         }
     }
 
     // ===================================================================== CLIENT
     // Full: Spieler und alle Zuschauerplätze besetzt; Spectate: Spieler 2 ist schon da, Beitritt nur als Zuschauer
-    public class FoundHost { public string Name, Ip; public bool Full, Spectate; public double Seen; }
+    public class FoundHost { public string Name, Ip; public bool Full, Spectate, Tour; public double Seen; }
 
     public class ClientSession
     {
@@ -649,6 +807,13 @@ namespace Sensensturm
         public bool Spectator;
         public string PlayerName = ""; // Name von Spieler 2 laut Lobby
         public int Spectators;
+        // Kennung im Raum (vom Host), Turnier-Teilnehmer, eigener Spielerplatz im laufenden Match (-1 = schaut zu)
+        public byte MyId = Pk.NoPeer;
+        public bool TourMember;
+        public int MySlot = 1;
+        // Turnierstand vom Host (gepackt, siehe Game.ReadTourInfo); TourSeq zählt jede Ankunft
+        public byte[] TourData;
+        public int TourSeq;
 
         double connectStart, lastJoin, lastRecv, lastPing, lastHello, lastDiscover;
         int discoverPort;
@@ -727,6 +892,10 @@ namespace Sensensturm
             seq = 0;
             MatchId = -1;
             Spectator = false;
+            TourMember = false;
+            MyId = Pk.NoPeer;
+            MySlot = 1;
+            TourData = null;
             InResults = MyVote = false;
             ReplayLen = 0;
             replayMid = -1;
@@ -779,7 +948,7 @@ namespace Sensensturm
                 }
                 if (now - lastPing > 0.5) { lastPing = now; var w = Pk.Begin(Pk.Ping); w.Write(now); Sock.Send(Host, Pk.End(w)); }
                 if (now - lastHello > 0.5) { lastHello = now; SendHello(); }
-                if (InResults && !Spectator && now - lastRematch > 0.2) { lastRematch = now; SendRematch(); }
+                if (InResults && !Spectator && !TourMember && now - lastRematch > 0.2) { lastRematch = now; SendRematch(); }
                 RequestReplay(now);
             }
         }
@@ -793,7 +962,7 @@ namespace Sensensturm
                 string ip = from.Address.ToString();
                 FoundHost f = Found.Find(x => x.Ip == ip);
                 if (f == null) { f = new FoundHost { Ip = ip }; Found.Add(f); }
-                f.Name = name; f.Full = st == 2; f.Spectate = st == 1; f.Seen = now;
+                f.Name = name; f.Full = st == 2; f.Spectate = st == 1; f.Tour = st == 3; f.Seen = now;
                 return;
             }
             if (Host == null || !from.Equals(Host)) return;
@@ -809,7 +978,13 @@ namespace Sensensturm
                         if (SavedTuning == null) SavedTuning = Tuning.ToBytes();
                         try { Tuning.FromBytes(t); } catch { }
                     }
-                    Spectator = r.ReadByte() == Pk.RoleSpectator;
+                    {
+                        byte role = r.ReadByte();
+                        Spectator = role == Pk.RoleSpectator;
+                        TourMember = role == Pk.RoleTour;
+                        if (r.BaseStream.Position < r.BaseStream.Length) MyId = r.ReadByte();
+                        MySlot = TourMember || Spectator ? -1 : 1;
+                    }
                     Status = Connected;
                     break;
                 case Pk.Reject:
@@ -817,6 +992,7 @@ namespace Sensensturm
                         byte reason = r.ReadByte();
                         Status = Failed;
                         Error = reason == 1 ? "Die Lobby ist voll (Spieler 2 und alle " + HostSession.MaxSpectators + " Zuschauerplätze sind besetzt)." :
+                                reason == 3 ? "Das Turnier ist voll (" + (HostSession.MaxMembers + 1) + " Teilnehmer)." :
                                 reason == 2 ? "Host und Client verwenden unterschiedliche Spielversionen." : "Beitritt abgelehnt.";
                         break;
                     }
@@ -837,7 +1013,11 @@ namespace Sensensturm
                     {
                         int tick = r.ReadInt32();
                         int mid = r.ReadInt32();
-                        int ack = r.ReadInt32();
+                        int id0 = r.ReadByte(), id1 = r.ReadByte();
+                        int ack0 = r.ReadInt32(), ack1 = r.ReadInt32();
+                        // eigener Platz: im Turnier je nach Paarung, sonst immer Spieler 2 (oder Zuschauer)
+                        int slot = TourMember ? (id0 == MyId ? 0 : id1 == MyId ? 1 : -1) : (Spectator ? -1 : 1);
+                        int ack = slot == 0 ? ack0 : slot == 1 ? ack1 : 0;
                         if (mid != MatchId) { MatchId = mid; AuthTick = -1; Pending.Clear(); NewMatch = true; }
                         GameState s = GameState.Read(r);
                         int n = r.ReadByte();
@@ -858,6 +1038,8 @@ namespace Sensensturm
                         }
                         if (tick > AuthTick || AuthTick < 0)
                         {
+                            MySlot = slot;
+                            if (TourMember) Spectator = slot < 0;
                             AuthTick = tick;
                             Ack = ack;
                             Auth = s;
@@ -866,6 +1048,13 @@ namespace Sensensturm
                             LobbyReceived = false;
                             Pending.RemoveAll(p => p.Seq <= ack);
                         }
+                        break;
+                    }
+                case Pk.TourInfo:
+                    {
+                        var ms = (MemoryStream)r.BaseStream;
+                        TourData = r.ReadBytes((int)(ms.Length - ms.Position));
+                        TourSeq++;
                         break;
                     }
                 case Pk.ReplayChunk:

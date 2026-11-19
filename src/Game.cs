@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Sensensturm
 {
-    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney, Replays, Multiplayer, Extras, Training }
+    public enum Scr { Main, Local, Host, Join, OnlineJoin, ClientLobby, Settings, Controls, Combos, Match, TourneySetup, Tourney, Replays, Multiplayer, Extras, Training, TourLobby }
     public enum Mode { Local, Host, Client }
 
     class Item
@@ -201,6 +201,8 @@ namespace Sensensturm
             if (host != null) foreach (string m in host.Messages) Toast(m, m.Contains("verloren") || m.Contains("getrennt"));
             if (host != null) host.Messages.Clear();
             if (toastTimer > 0) toastTimer--;
+            TickOnlineTourHostAlways();
+            TickOnlineTourClient();
 
             if (scr == Scr.Match) { if (replay != null) TickReplay(); else TickMatch(); }
             else TickMenus();
@@ -228,14 +230,14 @@ namespace Sensensturm
                 int port;
                 if (!int.TryParse(portText, out port)) port = Settings.Port;
                 client.Discover(Now, port);
-                if (client.Status == ClientSession.Connected) { Go(Scr.ClientLobby); Toast("Verbunden mit " + client.HostName + ".", false); }
+                if (client.Status == ClientSession.Connected) { if (!JoinedTour()) { Go(Scr.ClientLobby); Toast("Verbunden mit " + client.HostName + ".", false); } }
                 else if (client.Status == ClientSession.Failed) { Toast(client.Error, true); client.Status = ClientSession.Idle; client.RestoreTuning(); }
             }
             if (scr == Scr.OnlineJoin && client != null && link != null)
             {
                 if (link.Error != null) { LeaveClient(); }
                 else if (link.Decided != null && client.Status == ClientSession.Idle) client.ConnectEndpoint(link.Decided, Now);
-                else if (client.Status == ClientSession.Connected) { Go(Scr.ClientLobby); Toast("Online verbunden mit " + client.HostName + (client.OverRelay ? " (über Relay)" : " (direkt)") + ".", false); }
+                else if (client.Status == ClientSession.Connected) { if (!JoinedTour()) { Go(Scr.ClientLobby); Toast("Online verbunden mit " + client.HostName + (client.OverRelay ? " (über Relay)" : " (direkt)") + ".", false); } }
                 else if (client.Status == ClientSession.Failed) { Toast(client.Error, true); LeaveClient(); }
             }
             if (scr == Scr.ClientLobby && client != null)
@@ -309,7 +311,8 @@ namespace Sensensturm
                 case Scr.Controls: Settings.Save(); Go(Scr.Settings); break;
                 case Scr.Combos: Go(Scr.Extras); break;
                 case Scr.TourneySetup: Go(Scr.Main); break;
-                case Scr.Tourney: Go(Scr.Main); break;
+                case Scr.Tourney: if (!tourOnline && !tourClient) Go(Scr.Main); break;
+                case Scr.TourLobby: if (tourClient) LeaveOnlineTour(); else CloseTourHost(); break;
                 case Scr.Replays: Go(Scr.Extras); break;
                 case Scr.Multiplayer: Go(Scr.Main); break;
                 case Scr.Extras: Go(Scr.Main); break;
@@ -352,8 +355,10 @@ namespace Sensensturm
                     }
                 case Scr.Multiplayer:
                     Add("Online-Spiel erstellen", null, StartOnlineHost, null);
+                    Add("Online-Turnier erstellen", null, () => StartTourHost(true), null);
                     Add("Online-Spiel beitreten", null, () => { LeaveClient(); Go(Scr.OnlineJoin); }, null);
                     Add("LAN-Spiel erstellen", null, StartHost, null);
+                    Add("LAN-Turnier erstellen", null, () => StartTourHost(false), null);
                     Add("LAN-Spiel beitreten", null, () => { Go(Scr.Join); OpenJoin(); }, null);
                     Add("Zurück", null, () => Go(Scr.Main), null);
                     break;
@@ -402,7 +407,7 @@ namespace Sensensturm
                             foreach (FoundHost f in client.Found)
                             {
                                 FoundHost ff = f;
-                                Add("Gefunden: " + f.Name, f.Ip + (f.Full ? "  (voll)" : f.Spectate ? "  (zuschauen)" : ""), () => { ipText = ff.Ip; ConnectClient(); }, null, !busy && !f.Full);
+                                Add("Gefunden: " + f.Name, f.Ip + (f.Full ? "  (voll)" : f.Tour ? "  (Turnier)" : f.Spectate ? "  (zuschauen)" : ""), () => { ipText = ff.Ip; ConnectClient(); }, null, !busy && !f.Full);
                             }
                         Add("Zurück", null, () => { LeaveClient(); Go(Scr.Multiplayer); }, null);
                         break;
@@ -453,6 +458,9 @@ namespace Sensensturm
                     break;
                 case Scr.Tourney:
                     BuildTourneyItems();
+                    break;
+                case Scr.TourLobby:
+                    BuildTourLobbyItems();
                     break;
                 case Scr.Replays:
                     BuildReplayItems();
@@ -648,9 +656,14 @@ namespace Sensensturm
         GameState Predict(GameState auth)
         {
             GameState g = auth.Clone();
-            int oppHeld = g.p[0].prevHeld;
+            int me = client.MySlot == 0 ? 0 : 1;
+            int oppHeld = g.p[1 - me].prevHeld;
+            var hh = new int[2]; var pp = new int[2];
             foreach (NetInput ni in client.Pending)
-                Sim.Step(g, new[] { oppHeld, ni.Held }, new[] { 0, ni.Pressed }, null, true);
+            {
+                hh[1 - me] = oppHeld; hh[me] = ni.Held; pp[me] = ni.Pressed; pp[1 - me] = 0;
+                Sim.Step(g, hh, pp, null, true);
+            }
             return g;
         }
 
@@ -667,7 +680,7 @@ namespace Sensensturm
         void OpenComboView()
         {
             comboView = true;
-            comboViewSlot = mode == Mode.Client && client != null && !client.Spectator ? 1 : 0;
+            comboViewSlot = mode == Mode.Client && client != null && !client.Spectator ? (client.MySlot == 0 ? 0 : 1) : tourOnline && tourMatch && LocalTourSlot(1) ? 1 : 0;
             Audio.Play(Sfx.Select, 0.6f);
         }
 
@@ -722,6 +735,7 @@ namespace Sensensturm
                     break;
 
                 case Mode.Host:
+                    if (host != null && host.Tourney) { TickOnlineTourHost(menuOpen); break; }
                     if (host == null || !host.HasClient || host.PlayerLeft) { BackToHostLobby("Spieler 2 hat das Spiel verlassen. Zurück in der Lobby."); return; }
                     In.Sample(-1, In.PadIndex(0), out h0, out p0);
                     if (menuOpen) h0 = p0 = 0;
@@ -735,8 +749,9 @@ namespace Sensensturm
                 case Mode.Client:
                     if (client == null) { Go(Scr.Main); return; }
                     if (client.Status == ClientSession.Failed) { string er = client.Error; LeaveClient(); state = null; Go(Scr.Main); Toast(er, true); return; }
-                    if (client.LobbyReceived) { state = null; Go(Scr.ClientLobby); Toast("Der Host hat das Match beendet.", false); return; }
-                    if (client.NewMatch) { client.NewMatch = false; if (client.Auth != null) { names[1] = client.Spectator ? client.PlayerName : Settings.PlayerName; BeginMatch(ClientState(client.Auth)); } }
+                    if (client.LobbyReceived && !tourClient) { state = null; Go(Scr.ClientLobby); Toast("Der Host hat das Match beendet.", false); return; }
+                    if (client.NewMatch && tourClient) { if (client.Auth != null) StartClientTourMatch(); else client.NewMatch = false; }
+                    else if (client.NewMatch) { client.NewMatch = false; if (client.Auth != null) { names[1] = client.Spectator ? client.PlayerName : Settings.PlayerName; BeginMatch(ClientState(client.Auth)); } }
                     else if (client.Spectator)
                     {
                         // Zuschauer: Stand des Hosts übernehmen, zwischen zwei Snapshots (Relay: 30/s) einen Schritt weiterrechnen
@@ -761,7 +776,13 @@ namespace Sensensturm
                     In.Sample(-1, In.PadIndex(0), out h1, out p1);
                     if (menuOpen) h1 = p1 = 0;
                     client.SendInput(h1, p1);
-                    Sim.Step(state, new[] { state.p[0].prevHeld, h1 }, new[] { 0, p1 }, null, true);
+                    {
+                        // eigener Platz: normal Spieler 2, im Turnier je nach Paarung auch Spieler 1
+                        int me = client.MySlot == 0 ? 0 : 1;
+                        var hh = new int[2]; var pp = new int[2];
+                        hh[1 - me] = state.p[1 - me].prevHeld; hh[me] = h1; pp[me] = p1;
+                        Sim.Step(state, hh, pp, null, true);
+                    }
                     foreach (GameEvent e in client.NewEvents) OnEvent(e);
                     client.NewEvents.Clear();
                     break;
@@ -795,6 +816,7 @@ namespace Sensensturm
                     Add("Match beenden (zur Lobby)", null, () => BackToHostLobby(null), null);
                     Add("Lobby schließen", null, () => { CloseHost(); state = null; Go(Scr.Main); }, null);
                 }
+                else if (tourClient) Add("Turnier verlassen", null, LeaveOnlineTour, null);
                 else
                 {
                     Add(client != null && client.Spectator ? "Zuschauen beenden" : "Verbindung trennen", null, () => { LeaveClient(); state = null; Go(Scr.Multiplayer); }, null);
@@ -856,6 +878,8 @@ namespace Sensensturm
                 bool spectating = mode == Mode.Client && client != null && client.Spectator;
                 R.UltKeys[0] = mode == Mode.Client || bot0 != null ? "" : K(Btn.UltIndex, 0);
                 R.UltKeys[1] = spectating ? "" : mode == Mode.Client ? K(Btn.UltIndex, 0) : twoLocal ? K(Btn.UltIndex, 1) : "";
+                if (mode == Mode.Client && client != null && client.MySlot == 0) { R.UltKeys[0] = K(Btn.UltIndex, 0); R.UltKeys[1] = ""; }
+                if (mode == Mode.Host && tourOnline) for (int k = 0; k < 2; k++) R.UltKeys[k] = LocalTourSlot(k) ? K(Btn.UltIndex, 0) : "";
                 bool over = state.phase == GameState.Over && state.phaseTimer > 100 && !KoCamActive;
                 if (KoCamActive) R.DrawLetterbox(g);
                 else if (!over) R.DrawHud(g, state, names);
@@ -1006,15 +1030,17 @@ namespace Sensensturm
                     break;
                 case Scr.Multiplayer:
                     DrawTitle(g, "Online & LAN");
-                    GroupPanel(g, 140, 176, 480, 270, "Über das Internet");
-                    DrawItems(g, 165, 222, 430, 50, 12, 0, 2);
-                    Line(g, "Raum-Code mit Freunden teilen. Klappt auch über", 168, 362, info, R.FTiny);
-                    Line(g, "verschiedene Netzwerke, ohne Portfreigabe.", 168, 382, info, R.FTiny);
-                    GroupPanel(g, 660, 176, 480, 270, "Im selben Netzwerk (LAN)");
-                    DrawItems(g, 685, 222, 430, 50, 12, 2, 2);
-                    Line(g, "Für PCs im selben WLAN oder LAN. Beim ersten Hosten", 688, 362, info, R.FTiny);
-                    Line(g, "die Windows-Firewall für private Netzwerke erlauben.", 688, 382, info, R.FTiny);
-                    DrawItems(g, 490, 480, 300, 46, 0, 4, 1);
+                    GroupPanel(g, 140, 166, 480, 330, "Über das Internet");
+                    DrawItems(g, 165, 210, 430, 50, 12, 0, 3);
+                    Line(g, "Raum-Code mit Freunden teilen. Klappt auch über", 168, 412, info, R.FTiny);
+                    Line(g, "verschiedene Netzwerke, ohne Portfreigabe.", 168, 432, info, R.FTiny);
+                    Line(g, "Beitreten geht für Spiele und Turniere gleich.", 168, 452, dim, R.FTiny);
+                    GroupPanel(g, 660, 166, 480, 330, "Im selben Netzwerk (LAN)");
+                    DrawItems(g, 685, 210, 430, 50, 12, 3, 3);
+                    Line(g, "Für PCs im selben WLAN oder LAN. Beim ersten Hosten", 688, 412, info, R.FTiny);
+                    Line(g, "die Windows-Firewall für private Netzwerke erlauben.", 688, 432, info, R.FTiny);
+                    Line(g, "Turniere: bis zu 16 Teilnehmer, freie Plätze mit CPUs.", 688, 452, dim, R.FTiny);
+                    DrawItems(g, 490, 520, 300, 46, 0, 6, 1);
                     break;
                 case Scr.Extras:
                     DrawTitle(g, "Extras");
@@ -1137,6 +1163,9 @@ namespace Sensensturm
                     break;
                 case Scr.Tourney:
                     DrawTourney(g);
+                    break;
+                case Scr.TourLobby:
+                    DrawTourLobby(g);
                     break;
                 case Scr.Replays:
                     DrawReplayList(g);

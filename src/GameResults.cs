@@ -106,7 +106,7 @@ namespace Sensensturm
                 host.HostChar = hostChar;
                 host.ClientNextChar = state.p[1].charId;
             }
-            if (mode == Mode.Client && client != null && !client.Spectator)
+            if (mode == Mode.Client && client != null && !client.Spectator && !client.TourMember)
             {
                 client.InResults = true;
                 client.MyVote = false;
@@ -119,6 +119,11 @@ namespace Sensensturm
         {
             bool canReplay = lastReplay != null;
             if (tourMatch) Add("Weiter zum Turnierbaum", null, TourMatchDone, null);
+            else if (tourClient)
+            {
+                items.Add(new Item { Label = "Der Host geht gleich zum Turnierbaum weiter ...", Enabled = false });
+                Add("Turnier verlassen", null, LeaveOnlineTour, null);
+            }
             else if (mode == Mode.Local)
             {
                 Add("Revanche", null, StartLocal, null);
@@ -174,6 +179,11 @@ namespace Sensensturm
         string ResultStatus(out Color c)
         {
             c = Color.FromArgb(255, 225, 140);
+            if (tourOnline || tourClient)
+            {
+                c = Color.FromArgb(200, 210, 200, 235);
+                return tourClient ? "Online-Turnier: Ergebnis wird in den Turnierbaum übernommen." : "Online-Turnier: \"Weiter zum Turnierbaum\" bringt alle zurück zum Baum.";
+            }
             if (mode == Mode.Host && host != null)
             {
                 string who = host.ClientName;
