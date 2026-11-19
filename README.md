@@ -75,9 +75,19 @@ Im Hauptmenü **Turnier** wählen:
 2. Für jeden Teilnehmer per Enter/Klick zwischen **Mensch** und **CPU** (leicht/mittel/schwer) wechseln, mit Links/Rechts den Kämpfer wählen.
 3. **Turnier starten!** Die Paarungen werden ausgelost. Bei Teilnehmerzahlen ohne Zweierpotenz ziehen einige Teilnehmer per **Freilos** direkt in die zweite Runde ein.
 
-Gespielt wird im K.-o.-System, alle Menschen nacheinander am selben PC: Gegen die CPU gelten die Tasten von Spieler 1, bei Mensch gegen Mensch die Belegungen von Spieler 1 und 2. Kämpfe **CPU gegen CPU** werden wahlweise automatisch ausgerechnet oder angeschaut. Endet ein Match nach Zeitablauf unentschieden, entscheiden Leben, dann Schaden, dann das Los.
+Gespielt wird im K.-o.-System, alle Menschen nacheinander am selben PC (Turniere über mehrere PCs: siehe *Online- und LAN-Turnier*): Gegen die CPU gelten die Tasten von Spieler 1, bei Mensch gegen Mensch die Belegungen von Spieler 1 und 2. Kämpfe **CPU gegen CPU** werden wahlweise automatisch ausgerechnet oder angeschaut. Endet ein Match nach Zeitablauf unentschieden, entscheiden Leben, dann Schaden, dann das Los.
 
 Der **Turnierbaum** ist animiert. Die Teilnehmer fliegen nacheinander ein, die Linie des Siegers läuft leuchtend in die nächste Runde, wo sein Name aufploppt, und Verlierer werden ausgegraut und durchgestrichen. Das nächste Match pulsiert mit einer VS-Marke. Am Ende gibt es eine Siegerehrung mit Pokal und Konfetti. Ein laufendes Turnier lässt sich verlassen und im Hauptmenü mit **Turnier fortsetzen** wieder aufnehmen, solange das Spiel offen bleibt.
+
+## Online- und LAN-Turnier (mehrere PCs)
+Turniere gehen auch über mehrere PCs, übers Internet (Raum-Code) oder im LAN, mit bis zu 16 Teilnehmern:
+1. Host: *Online & LAN >* **Online-Turnier erstellen** (oder **LAN-Turnier erstellen**). Es erscheint ein Raum-Code bzw. die IP-Adresse.
+2. Mitspieler: ganz normal **Online-Spiel beitreten** (Code) oder **LAN-Spiel beitreten**. Sie landen automatisch in der Turnier-Lobby und wählen dort ihren Kämpfer.
+3. Der Host stellt Leben, Zeitlimit und Arena ein und kann freie Plätze mit **CPU-Gegnern** (leicht/mittel/schwer) auffüllen. Dann **Turnier starten!**
+
+Alle sehen denselben animierten Turnierbaum. Der Host startet jedes Match. Gespielt wird an den eigenen PCs mit den Tasten von Spieler 1, alle anderen schauen live zu. Der PC des Hosts rechnet jedes Match, auch wenn zwei andere Teilnehmer gegeneinander spielen. CPU gegen CPU wird wahlweise ausgerechnet oder angeschaut. Nach dem Match bringt der Host mit **Weiter zum Turnierbaum** alle zurück zum Baum.
+Verlässt jemand das Turnier, übernimmt eine CPU seinen Platz. Geht er mitten im Match, kommt sein Gegner weiter. **Neues Turnier** bringt alle zurück in die Lobby, ohne dass jemand neu beitreten muss.
+Hinweis: Läuft die Verbindung über das Relay (kein direkter Weg möglich), bekommen Zuschauer etwas weniger Updates pro Sekunde. Alle Teilnehmer brauchen dieselbe Spielversion.
 
 ## Online-Spiel (über das Internet, verschiedene Netzwerke)
 1. Host: *Online & LAN >* **Online-Spiel erstellen**. Es erscheint ein 6-stelliger **Raum-Code** (mit „Raum-Code kopieren“ in die Zwischenablage).
